@@ -1,13 +1,7 @@
 (* Ocamllex scanner for MicroC *)
 
-(*{ open Parser }*)
-{ type token = SEQUENCE | INDENT | LPAREN | RPAREN | LBRACE | RBRACE | COMMA | PLUS | MINUS | TIMES | DIVIDE 
-| EXPONENT | MODULUS | ASSIGN | ASSIGNADD | ASSIGNMINUS | ASSIGNTIMES | ASSIGNDIVIDE | EQ | NEQ 
-| LT | LEQ | GT | GEQ | AND | OR | NOT | IF | ELSE | ELIF | FOR | WHILE | BREAK | CONTINUE | DEF 
-| RETURN | INT | BOOL | FLOAT | CHAR | STRING | LIST | VOID | IMAGE | PIXEL | MATRIX 
-| BLIT of bool | LITERAL of int | FLIT of string | LITERALSTRING of string | LITERALCHAR of char
-| ID of string | EOF
-}
+{ open Parser }
+
 
 let digit = ['0' - '9']
 let digits = digit+
@@ -18,14 +12,16 @@ let strings = '\"' string_lex '\"'
 rule token = parse
   [' ' '\r' '\t'] { token lexbuf } (* Whitespace *)
 | "//"     { comment lexbuf }           (* Comments *)
-| '\n'     { SEQUENCE }
+| '\n'+     { SEQUENCE }
 | '('      { LPAREN }
 | ')'      { RPAREN }
 | '['      { LBRACE }
 | ']'      { RBRACE }
 | '{'      { LBLOCK }
 | '}'      { RBLOCK }
+| ';'      { SEMI }
 | ','      { COMMA }
+| ':'      { COLON }
 | '+'      { PLUS }
 | '-'      { MINUS }
 | '*'      { TIMES }

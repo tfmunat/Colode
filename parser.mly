@@ -4,10 +4,10 @@
 open Ast
 %}
 
-%token SEQUENCE LBLOCK RBLOCK LPAREN RPAREN LBRACE RBRACE COMMA PLUS MINUS TIMES DIVIDE
-%token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR
+%token SEQUENCE LBLOCK RBLOCK LPAREN RPAREN LBRACE RBRACE SEMI COMMA PLUS MINUS TIMES DIVIDE
+%token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNTIMES ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR
 %token RETURN IF ELSE ELIF FOR WHILE BREAK CONTINUE DEF INT BOOL FLOAT VOID
-%token CHAR STRING LIST VOID IMAGE PIXEL MATRIX
+%token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT LITERALSTRING
@@ -19,7 +19,7 @@ open Ast
 
 %nonassoc NOELSE
 %nonassoc ELSE
-%right ASSIGN
+%right ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE ASSIGNTIMES
 %left OR
 %left AND
 %left EQ NEQ
@@ -36,7 +36,7 @@ program:
 
 decls:
    /* nothing */ { ([], [])               }
- | decls vdecl { (($2 :: fst $1), snd $1) }
+ | decls stmt { (($2 :: fst $1), snd $1) }
  | decls fdecl { (fst $1, ($2 :: snd $1)) }
 
 fdecl:
@@ -64,10 +64,9 @@ typ:
   | LIST  { List }
   | STRING { String }
   | IMAGE  { Image }
-  | Pixel  { Pixel }
-  | Matrix { Matrix }
+  | PIXEL  { Pixel }
+  | MATRIX { Matrix } 
 
-/* TODO Variables should be able to be declared anywhere */
 vdecl_list:
     /* nothing */    { [] }
   | vdecl_list vdecl { $2 :: $1 }
@@ -79,22 +78,23 @@ stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
 
-/* TODO adjust if/else/for/while to match python style, aka without parentheses and with a colon at the end of the line */
+/* TODO adjust for (;;)  to match python style? */
 stmt:
     expr SEQUENCE                           { Expr $1               }
-  | RETURN expr_opt SEMI                    { Return $2             }
+  | RETURN expr_opt                         { Return $2             }
   | LBLOCK stmt_list RBLOCK                 { Block(List.rev $2)    }
-  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([])) }
-  | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7)        }
+  | IF expr COLON stmt %prec NOELSE { If($2, $4, Block([])) }
+  | IF expr COLON stmt ELIF expr COLON stmt    { If($2, $4, If($6, $8, Block([])))  }
+  | IF expr COLON stmt ELIF expr COLON stmt ELSE stmt  { If($2, $4, If($6, $8, $10))  }
+  | IF expr COLON stmt ELSE stmt    { If($2, $4, $6)        }
   | FOR LPAREN expr_opt SEMI expr SEMI expr_opt RPAREN stmt
                                             { For($3, $5, $7, $9)   }
-  | WHILE LPAREN expr RPAREN stmt           { While($3, $5)         }
+  | WHILE expr COLON stmt           { While($2, $4)         }
+  | vdecl                                   { Declare(fst $1, snd $1) }
 
 expr_opt:
-    /* nothing */ { Noexpr }
+  |  { Noexpr }
   | expr          { $1 }
-
-/* TODO Add convolution and ASSIGN* operations */
 
 expr:
     LITERAL          { Literal($1)            }
@@ -113,9 +113,15 @@ expr:
   | expr GEQ    expr { Binop($1, Geq,   $3)   }
   | expr AND    expr { Binop($1, And,   $3)   }
   | expr OR     expr { Binop($1, Or,    $3)   }
+  | expr CONV     expr { Binop($1, Conv,    $3)   }
   | MINUS expr %prec NEG { Unop(Neg, $2)      }
   | NOT expr         { Unop(Not, $2)          }
   | ID ASSIGN expr   { Assign($1, $3)         }
+  | typ ID ASSIGN expr   { DeclAssign($1, $2, $4)         }
+  | ID ASSIGNADD expr   { AssignAdd($1, $3)       }
+  | ID ASSIGNMINUS expr   { AssignMinus($1, $3)    }
+  | ID ASSIGNTIMES expr   { AssignTimes($1, $3)     }
+  | ID ASSIGNDIVIDE expr   { AssignDivide($1, $3) }
   | ID LPAREN args_opt RPAREN { Call($1, $3)  }
   | LPAREN expr RPAREN { $2                   }
 
