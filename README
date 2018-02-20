@@ -1,0 +1,6 @@
+**Building instructions**
+
+	ocamllex scanner.mll
+	ocamlyacc parser.mly
+	ocamlc ast.ml
+	ocamlc -o top ast.cmo parser.cmo scanner.cmo toplevel.ml
