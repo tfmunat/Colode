@@ -12,7 +12,7 @@ let strings = '\"' string_lex '\"'
 rule token = parse
   [' ' '\r' '\t'] { token lexbuf } (* Whitespace *)
 | "//"     { comment lexbuf }           (* Comments *)
-| '\n'+     { SEQUENCE }
+| ('\n'+ '\t'*)*     { SEQUENCE }
 | '('      { LPAREN }
 | ')'      { RPAREN }
 | '['      { LBRACE }

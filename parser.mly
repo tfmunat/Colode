@@ -17,16 +17,17 @@ open Ast
 %start program
 %type <Ast.program> program
 
-%nonassoc NOELSE
-%nonassoc ELSE
+%nonassoc NOELSE NOELIF
+%nonassoc ELSE ELIF 
 %right ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE ASSIGNTIMES
 %left OR
 %left AND
 %left EQ NEQ
 %left LT GT LEQ GEQ
 %left PLUS MINUS
-%left TIMES DIVIDE
-%right NOT NEG
+%left TIMES DIVIDE LEFT
+%left EXPONENT MODULUS CONV ID SEQUENCE
+%right NOT NEG 
 
 
 %%
@@ -77,22 +78,24 @@ vdecl:
 stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
+  | stmt_list SEQUENCE stmt { $3 :: $1 }
 
 compound_stmt:
  | LBLOCK stmt_list RBLOCK { $2 }
- | LBLOCK SEQUENCE stmt_list RBLOCK  { $3 }
- | SEQUENCE compound_stmt { $2 }
+/* | SEQUENCE compound_stmt { $2 }
  | compound_stmt SEQUENCE { $1}
+*/
 
 /* TODO adjust for (;;)  to match python style? */
 stmt:
-    expr SEQUENCE                           { Expr $1               }
-  | RETURN expr_opt                         { Return $2             }
+   expr SEQUENCE                           { Expr $1               }
+  /*| SEQUENCE expr                            { Expr $2               }*/
+  | RETURN expr_opt SEQUENCE                        { Return $2             }
   | compound_stmt                 { Block(List.rev $1)  }
   | IF expr COLON stmt %prec NOELSE { If($2, $4, Block([])) }
-  | IF expr COLON stmt ELIF expr COLON stmt    { If($2, $4, If($6, $8, Block([])))  }
+  | IF expr COLON stmt ELIF expr COLON stmt %prec NOELSE   { If($2, $4, If($6, $8, Block([])))  }
   | IF expr COLON stmt ELIF expr COLON stmt ELSE stmt  { If($2, $4, If($6, $8, $10))  }
-  | IF expr COLON stmt ELSE stmt    { If($2, $4, $6)        }
+  | IF expr COLON stmt ELSE stmt  %prec NOELIF  { If($2, $4, $6)        }
   | FOR LPAREN expr_opt SEMI expr SEMI expr_opt RPAREN stmt
                                             { For($3, $5, $7, $9)   }
   | WHILE expr COLON stmt           { While($2, $4)         }
