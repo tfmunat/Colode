@@ -10,9 +10,8 @@ let string_lex = char_lex+
 let strings = '\"' string_lex '\"'
 
 rule token = parse
-  [' ' '\r' '\t'] { token lexbuf } (* Whitespace *)
+  [' ' '\r' '\t' '\n'] { token lexbuf } (* Whitespace *)
 | "//"     { comment lexbuf }           (* Comments *)
-| ('\n'+ '\t'*)*     { SEQUENCE }
 | '('      { LPAREN }
 | ')'      { RPAREN }
 | '['      { LBRACE }
@@ -22,6 +21,7 @@ rule token = parse
 | ';'      { SEMI }
 | ','      { COMMA }
 | ':'      { COLON }
+| '.'	   { DOT }
 | '+'      { PLUS }
 | '-'      { MINUS }
 | '*'      { TIMES }
@@ -44,6 +44,7 @@ rule token = parse
 | "or"     { OR }
 | "not"      { NOT }
 | "if"     { IF }
+| "in"     { IN }
 | "else"   { ELSE }
 | "elif"   { ELIF }
 | "for"    { FOR }

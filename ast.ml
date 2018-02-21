@@ -18,14 +18,17 @@ type expr =
   | Id of string
   | Binop of expr * op * expr
   | Unop of uop * expr
-  | Assign of string * expr
-  | AssignAdd of string * expr
-  | AssignMinus of string * expr
-  | AssignTimes of string * expr
-  | AssignDivide of string * expr
+  | Assign of expr * expr
+  | AssignAdd of expr * expr
+  | AssignMinus of expr * expr
+  | AssignTimes of expr * expr
+  | AssignDivide of expr * expr
   | DeclAssign of typ * string * expr
   | Call of string * expr list
   | Array of expr list
+  | ArrayIndex of expr * expr
+  | Array2DIndex of expr * expr * expr
+  | MemberAccess of expr * string list
   | Noexpr
 
 type stmt =
@@ -33,7 +36,7 @@ type stmt =
   | Expr of expr
   | Return of expr
   | If of expr * stmt * stmt
-  | For of expr * expr * expr * stmt
+  | For of expr * expr * stmt
   | While of expr * stmt
   | Declare of typ * string
 
@@ -89,15 +92,18 @@ let rec string_of_expr = function
   | Binop(e1, o, e2) ->
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
-  | Assign(v, e) -> v ^ " = " ^ string_of_expr e
-  | AssignAdd(v, e) -> v ^ " += " ^ string_of_expr e
-  | AssignMinus(v, e) -> v ^ " -= " ^ string_of_expr e
-  | AssignTimes(v, e) -> v ^ " *= " ^ string_of_expr e
-  | AssignDivide(v, e) -> v ^ " /= " ^ string_of_expr e
+  | Assign(v, e) -> string_of_expr v ^ " = " ^ string_of_expr e
+  | AssignAdd(v, e) -> string_of_expr v ^ " += " ^ string_of_expr e
+  | AssignMinus(v, e) -> string_of_expr v ^ " -= " ^ string_of_expr e
+  | AssignTimes(v, e) -> string_of_expr v ^ " *= " ^ string_of_expr e
+  | AssignDivide(v, e) -> string_of_expr v ^ " /= " ^ string_of_expr e
   | DeclAssign(t, v, e) -> (string_of_typ t) ^ v ^ " /= " ^ string_of_expr e
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Array(l) -> "[" ^ (String.concat ", " (List.map string_of_expr l)) ^ "]"
+  | ArrayIndex(a, b) -> string_of_expr a ^ "[" ^ string_of_expr b ^ "]"
+  | Array2DIndex(a, b, c) -> string_of_expr a ^ "[" ^ string_of_expr b ^ "]" ^ "[" ^ string_of_expr c ^ "]"
+  | MemberAccess(a, b) -> string_of_expr a ^ "." ^String.concat "." b
   | CharLiteral(c) -> "'" ^ Char.escaped c ^ "'"
   | StringLiteral(s) -> "\"" ^ s ^ "\""
   | Noexpr -> ""
@@ -111,9 +117,8 @@ let rec string_of_stmt = function
   | If(e, s, Block([])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
-  | For(e1, e2, e3, s) ->
-      "for (" ^ string_of_expr e1  ^ " ; " ^ string_of_expr e2 ^ " ; " ^
-      string_of_expr e3  ^ ") " ^ string_of_stmt s
+  | For(e1, e2, e3) ->
+      "for " ^ string_of_expr e1  ^ " in " ^ string_of_expr e2  ^ string_of_stmt e3
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
   | Declare(t, s) -> (string_of_typ t) ^ " " ^ s
 

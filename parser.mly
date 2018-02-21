@@ -5,8 +5,8 @@ open Ast
 %}
 
 %token SEQUENCE LBLOCK RBLOCK LPAREN RPAREN LBRACE RBRACE SEMI COMMA PLUS MINUS TIMES DIVIDE
-%token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNTIMES ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR
-%token RETURN IF ELSE ELIF FOR WHILE BREAK CONTINUE DEF INT BOOL FLOAT VOID
+%token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNTIMES ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR DOT
+%token RETURN IF ELSE ELIF FOR WHILE BREAK CONTINUE DEF INT BOOL FLOAT VOID IN
 %token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV
 %token <int> LITERAL
 %token <bool> BLIT
@@ -17,16 +17,16 @@ open Ast
 %start program
 %type <Ast.program> program
 
-%nonassoc NOELSE NOELIF
-%nonassoc ELSE ELIF 
-%right ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE ASSIGNTIMES
-%left OR
+%nonassoc NOELSE NOELIF ONED
+%nonassoc ELSE ELIF  LBRACE LPAREN  RBRACE RPAREN
+%right ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE ASSIGNTIMES 
+%left OR DOT
 %left AND
 %left EQ NEQ
 %left LT GT LEQ GEQ
 %left PLUS MINUS
 %left TIMES DIVIDE LEFT
-%left EXPONENT MODULUS CONV ID SEQUENCE
+%left EXPONENT MODULUS CONV ID SEMI 
 %right NOT NEG 
 
 
@@ -73,37 +73,39 @@ vdecl_list:
   | vdecl_list COMMA vdecl { $2 :: $1 }
 */
 vdecl:
-   typ ID SEQUENCE { ($1, $2) }
+   typ ID SEMI { ($1, $2) }
 
 stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
-  | stmt_list SEQUENCE stmt { $3 :: $1 }
 
 compound_stmt:
  | LBLOCK stmt_list RBLOCK { $2 }
-/* | SEQUENCE compound_stmt { $2 }
- | compound_stmt SEQUENCE { $1}
-*/
-
-/* TODO adjust for (;;)  to match python style? */
+  
 stmt:
-   expr SEQUENCE                           { Expr $1               }
-  /*| SEQUENCE expr                            { Expr $2               }*/
-  | RETURN expr_opt SEQUENCE                        { Return $2             }
-  | compound_stmt                 { Block(List.rev $1)  }
-  | IF expr COLON stmt %prec NOELSE { If($2, $4, Block([])) }
-  | IF expr COLON stmt ELIF expr COLON stmt %prec NOELSE   { If($2, $4, If($6, $8, Block([])))  }
-  | IF expr COLON stmt ELIF expr COLON stmt ELSE stmt  { If($2, $4, If($6, $8, $10))  }
-  | IF expr COLON stmt ELSE stmt  %prec NOELIF  { If($2, $4, $6)        }
-  | FOR LPAREN expr_opt SEMI expr SEMI expr_opt RPAREN stmt
-                                            { For($3, $5, $7, $9)   }
+   expr SEMI                           { Expr $1               }
+  | RETURN expr_opt SEMI                        { Return $2             }
+  | IF expr stmt %prec NOELSE { If($2, $3, Block([])) }
+  | IF expr stmt ELIF expr stmt %prec NOELSE   { If($2, $3, If($5, $6, Block([])))  }
+  | IF expr stmt ELIF expr stmt ELSE stmt  { If($2, $3, If($5, $6, $8))  }
+  | IF expr stmt ELSE stmt  %prec NOELIF  { If($2, $3, $5)        }
+  | FOR expr IN expr stmt
+                                            { For($2, $4, $5)   }
   | WHILE expr COLON stmt           { While($2, $4)         }
   | vdecl                                   { Declare(fst $1, snd $1) }
+  | compound_stmt {Block(List.rev $1)}
 
 expr_opt:
   |  { Noexpr }
   | expr          { $1 }
+
+member: 
+ DOT ID { [$2] } 
+ | member DOT ID { $3 :: $1 }
+
+name: ID {Id($1)} 
+  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
+  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
 
 expr:
     LITERAL          { Literal($1)            }
@@ -127,15 +129,19 @@ expr:
   | expr CONV     expr { Binop($1, Conv,    $3)   }
   | MINUS expr %prec NEG { Unop(Neg, $2)      }
   | NOT expr         { Unop(Not, $2)          }
-  | ID ASSIGN expr   { Assign($1, $3)         }
+  | name ASSIGN expr   { Assign($1, $3)         }
   | typ ID ASSIGN expr   { DeclAssign($1, $2, $4)         }
-  | ID ASSIGNADD expr   { AssignAdd($1, $3)       }
-  | ID ASSIGNMINUS expr   { AssignMinus($1, $3)    }
-  | ID ASSIGNTIMES expr   { AssignTimes($1, $3)     }
-  | ID ASSIGNDIVIDE expr   { AssignDivide($1, $3) }
+  | name ASSIGNADD expr   { AssignAdd($1, $3)       }
+  | name ASSIGNMINUS expr   { AssignMinus($1, $3)    }
+  | name ASSIGNTIMES expr   { AssignTimes($1, $3)     }
+  | name ASSIGNDIVIDE expr   { AssignDivide($1, $3) }
   | ID LPAREN args_opt RPAREN { Call($1, $3)  }
-  | LPAREN expr RPAREN { $2                   }
+  /*| LPAREN expr RPAREN { $2                   }*/
   | array_lit          { $1 }
+  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
+  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
+  | expr member     { MemberAccess($1, List.rev $2) }
+
 
 array_lit: LBRACE array_opt RBRACE { Array(List.rev $2) }
 
