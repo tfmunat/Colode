@@ -40,11 +40,11 @@ decls:
  | decls fdecl { (fst $1, ($2 :: snd $1)) }
 
 fdecl:
-   typ ID LPAREN formals_opt RPAREN LBLOCK vdecl_list stmt_list RBLOCK
-     { { typ = $1;
+   DEF ID LPAREN formals_opt RPAREN COLON typ compound_stmt
+     { { typ = $7;
 	 fname = $2;
 	 formals = $4;
-	 locals = List.rev $7;
+	 locals = [];
 	 body = List.rev $8 } }
 
 formals_opt:
@@ -66,11 +66,11 @@ typ:
   | IMAGE  { Image }
   | PIXEL  { Pixel }
   | MATRIX { Matrix } 
-
+/*
 vdecl_list:
-    /* nothing */    { [] }
-  | vdecl_list vdecl { $2 :: $1 }
-
+       { [] }
+  | vdecl_list COMMA vdecl { $2 :: $1 }
+*/
 vdecl:
    typ ID SEQUENCE { ($1, $2) }
 
@@ -78,11 +78,17 @@ stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
 
+compound_stmt:
+ | LBLOCK stmt_list RBLOCK { $2 }
+ | LBLOCK SEQUENCE stmt_list RBLOCK  { $3 }
+ | SEQUENCE compound_stmt { $2 }
+ | compound_stmt SEQUENCE { $1}
+
 /* TODO adjust for (;;)  to match python style? */
 stmt:
     expr SEQUENCE                           { Expr $1               }
   | RETURN expr_opt                         { Return $2             }
-  | LBLOCK stmt_list RBLOCK                 { Block(List.rev $2)    }
+  | compound_stmt                 { Block(List.rev $1)  }
   | IF expr COLON stmt %prec NOELSE { If($2, $4, Block([])) }
   | IF expr COLON stmt ELIF expr COLON stmt    { If($2, $4, If($6, $8, Block([])))  }
   | IF expr COLON stmt ELIF expr COLON stmt ELSE stmt  { If($2, $4, If($6, $8, $10))  }
@@ -124,6 +130,13 @@ expr:
   | ID ASSIGNDIVIDE expr   { AssignDivide($1, $3) }
   | ID LPAREN args_opt RPAREN { Call($1, $3)  }
   | LPAREN expr RPAREN { $2                   }
+  | array_lit          { $1 }
+
+array_lit: LBRACE array_opt RBRACE { Array(List.rev $2) }
+
+array_opt: { [] }
+  | expr { [$1] }
+  |  array_opt COMMA expr { $3 :: $1 }
 
 args_opt:
     /* nothing */ { [] }

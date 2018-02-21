@@ -23,6 +23,7 @@ type expr =
   | AssignDivide of string * expr
   | DeclAssign of typ * string * expr
   | Call of string * expr list
+  | Array of expr list
   | Noexpr
 
 type stmt =
@@ -94,6 +95,7 @@ let rec string_of_expr = function
   | DeclAssign(t, v, e) -> (string_of_typ t) ^ v ^ " /= " ^ string_of_expr e
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | Array(l) -> "[" ^ (String.concat ", " (List.map string_of_expr l)) ^ "]"
   | Noexpr -> ""
 
 
