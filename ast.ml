@@ -13,6 +13,8 @@ type expr =
     Literal of int
   | Fliteral of string
   | BoolLit of bool
+  | CharLiteral of char
+  | StringLiteral of string
   | Id of string
   | Binop of expr * op * expr
   | Unop of uop * expr
@@ -96,6 +98,8 @@ let rec string_of_expr = function
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Array(l) -> "[" ^ (String.concat ", " (List.map string_of_expr l)) ^ "]"
+  | CharLiteral(c) -> "'" ^ Char.escaped c ^ "'"
+  | StringLiteral(s) -> "\"" ^ s ^ "\""
   | Noexpr -> ""
 
 
