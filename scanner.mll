@@ -1,7 +1,6 @@
-(* Ocamllex scanner for MicroC *)
+(* Ocamllex scanner for Colode *)
 
 { open Parser }
-
 
 let digit = ['0' - '9']
 let digits = digit+
@@ -29,10 +28,10 @@ rule token = parse
 | '^'      { EXPONENT }
 | '%'      { MODULUS }
 | '='      { ASSIGN }
-| "+="      { ASSIGNADD }
-| "-="      { ASSIGNMINUS }
-| "*="      { ASSIGNTIMES }
-| "/="      { ASSIGNDIVIDE }
+| "+="     { ASSIGNADD }
+| "-="     { ASSIGNMINUS }
+| "*="     { ASSIGNTIMES }
+| "/="     { ASSIGNDIVIDE }
 | "=="     { EQ }
 | "!="     { NEQ }
 | '<'      { LT }
@@ -40,9 +39,9 @@ rule token = parse
 | ">"      { GT }
 | ">="     { GEQ }
 | "**"     { CONV }
-| "and"     { AND }
+| "and"    { AND }
 | "or"     { OR }
-| "not"      { NOT }
+| "not"    { NOT }
 | "if"     { IF }
 | "in"     { IN }
 | "else"   { ELSE }
@@ -51,7 +50,7 @@ rule token = parse
 | "while"  { WHILE }
 | "break"  { BREAK }
 | "continue" { CONTINUE }
-| "def"		{ DEF }
+| "def"	   { DEF }
 | "return" { RETURN }
 | "int"    { INT }
 | "bool"   { BOOL }
@@ -69,7 +68,7 @@ rule token = parse
 | digits '.'  digit* ( ['e' 'E'] ['+' '-']? digits )? as lxm { FLIT(lxm) }
 | strings as s { LITERALSTRING(s) }
 | '\'' (char_lex as c) '\'' { LITERALCHAR(c) }
-| ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']*     as lxm { ID(lxm) }
+| ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 | eof { EOF }
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }
 
