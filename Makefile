@@ -9,4 +9,9 @@ clean:
 	rm -rf *.cmo *.cmi a.out parser.ml parser.mli scanner.ml _build toplevel.native top
 
 tester:
-	bash tester.sh
+	for t in Tests/*.cld; \
+	do \
+  	  echo "Running test $$t"; \
+  	  ./toplevel.native < $$t; \
+  	  echo "-----------------------------------------"; \
+	done
