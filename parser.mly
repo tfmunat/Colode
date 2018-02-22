@@ -140,7 +140,7 @@ expr:
   | array_lit          { $1 }
   | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
   | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
-  | expr member     { MemberAccess($1, List.rev $2) }
+  | ID member     { MemberAccess(Id($1), List.rev $2) }
 
 
 array_lit: LBRACE array_opt RBRACE { Array(List.rev $2) }
