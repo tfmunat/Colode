@@ -24,7 +24,7 @@ open Ast
 %left AND
 %left EQ NEQ
 %left LT GT LEQ GEQ
-%left PLUS MINUS
+%left PLUS MINUS 
 %left TIMES DIVIDE LEFT
 %left EXPONENT MODULUS CONV ID SEMI 
 %right NOT NEG 
@@ -91,7 +91,7 @@ stmt:
   | IF expr stmt ELSE stmt  %prec NOELIF  { If($2, $3, $5)        }
   | FOR expr IN expr stmt
                                             { For($2, $4, $5)   }
-  | WHILE expr COLON stmt           { While($2, $4)         }
+  | WHILE expr stmt           { While($2, $3)         }
   | vdecl                                   { Declare(fst $1, snd $1) }
   | compound_stmt {Block(List.rev $1)}
 
@@ -117,6 +117,7 @@ expr:
   | expr PLUS   expr { Binop($1, Add,   $3)   }
   | expr MINUS  expr { Binop($1, Sub,   $3)   }
   | expr TIMES  expr { Binop($1, Mult,  $3)   }
+  | expr EXPONENT  expr { Binop($1, Exp,  $3)   }
   | expr DIVIDE expr { Binop($1, Div,   $3)   }
   | expr EQ     expr { Binop($1, Equal, $3)   }
   | expr NEQ    expr { Binop($1, Neq,   $3)   }
