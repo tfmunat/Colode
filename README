@@ -1,0 +1,8 @@
+Build Colode compiler:
+	ocamlbuild toplevel.native
+
+Run tests:
+	./tester.sh
+
+Current issues:
+	Comments in the same line as code will not be parsed correctly.
