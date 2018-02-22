@@ -106,36 +106,36 @@ name: ID {Id($1)}
   | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
 
 expr:
-    LITERAL          { Literal($1)            }
-  | FLIT	     { Fliteral($1)           }
-  | BLIT             { BoolLit($1)            }
-  | LITERALCHAR       { CharLiteral($1)}
-  | LITERALSTRING       { StringLiteral($1)}
-  | ID               { Id($1)                 }
-  | expr PLUS   expr { Binop($1, Add,   $3)   }
-  | expr MINUS  expr { Binop($1, Sub,   $3)   }
-  | expr TIMES  expr { Binop($1, Mult,  $3)   }
+    LITERAL          { Literal($1)              }
+  | FLIT	     { Fliteral($1)             }
+  | BLIT             { BoolLit($1)              }
+  | LITERALCHAR      { CharLiteral($1)          }
+  | LITERALSTRING    { StringLiteral($1)        }
+  | ID               { Id($1)                   }
+  | expr PLUS   expr { Binop($1, Add,   $3)     }
+  | expr MINUS  expr { Binop($1, Sub,   $3)     }
+  | expr TIMES  expr { Binop($1, Mult,  $3)     }
   | expr EXPONENT  expr { Binop($1, Exp,  $3)   }
-  | expr DIVIDE expr { Binop($1, Div,   $3)   }
-  | expr EQ     expr { Binop($1, Equal, $3)   }
-  | expr NEQ    expr { Binop($1, Neq,   $3)   }
-  | expr LT     expr { Binop($1, Less,  $3)   }
-  | expr LEQ    expr { Binop($1, Leq,   $3)   }
-  | expr GT     expr { Binop($1, Greater, $3) }
-  | expr GEQ    expr { Binop($1, Geq,   $3)   }
-  | expr AND    expr { Binop($1, And,   $3)   }
-  | expr OR     expr { Binop($1, Or,    $3)   }
-  | expr CONV     expr { Binop($1, Conv,    $3)   }
-  | MINUS expr %prec NEG { Unop(Neg, $2)      }
-  | NOT expr         { Unop(Not, $2)          }
+  | expr DIVIDE expr { Binop($1, Div,   $3)     }
+  | expr EQ     expr { Binop($1, Equal, $3)     }
+  | expr NEQ    expr { Binop($1, Neq,   $3)     }
+  | expr LT     expr { Binop($1, Less,  $3)     }
+  | expr LEQ    expr { Binop($1, Leq,   $3)     }
+  | expr GT     expr { Binop($1, Greater, $3)   }
+  | expr GEQ    expr { Binop($1, Geq,   $3)     }
+  | expr AND    expr { Binop($1, And,   $3)     }
+  | expr OR     expr { Binop($1, Or,    $3)     }
+  | expr CONV     expr { Binop($1, Conv,    $3) }
+  | MINUS expr %prec NEG { Unop(Neg, $2)        }
+  | NOT expr         { Unop(Not, $2)            }
   | name ASSIGN expr   { Assign($1, $3)         }
-  | typ ID ASSIGN expr   { DeclAssign($1, $2, $4)         }
+  | typ ID ASSIGN expr   { DeclAssign($1, $2, $4)   }
   | name ASSIGNADD expr   { AssignAdd($1, $3)       }
-  | name ASSIGNMINUS expr   { AssignMinus($1, $3)    }
-  | name ASSIGNTIMES expr   { AssignTimes($1, $3)     }
+  | name ASSIGNMINUS expr   { AssignMinus($1, $3)   }
+  | name ASSIGNTIMES expr   { AssignTimes($1, $3)   }
   | name ASSIGNDIVIDE expr   { AssignDivide($1, $3) }
-  | ID LPAREN args_opt RPAREN { Call($1, $3)  }
-  /*| LPAREN expr RPAREN { $2                   }*/
+  | ID LPAREN args_opt RPAREN { Call($1, $3)        }
+  /*| LPAREN expr RPAREN { $2 } */
   | array_lit          { $1 }
   | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
   | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
@@ -144,7 +144,7 @@ expr:
 
 array_lit: LBRACE array_opt RBRACE { Array(List.rev $2) }
 
-array_opt: { [] }
+array_opt: { [] } 
   | expr { [$1] }
   |  array_opt COMMA expr { $3 :: $1 }
 
