@@ -6,5 +6,3 @@ ocamlbuild toplevel.native
 #ocamlyacc parser.mly
 #ocamlc ast.ml parser.mli parser.ml scanner.ml
 #camlc -o top ast.cmo parser.cmo scanner.cmo toplevel.ml
-
-
