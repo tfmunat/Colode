@@ -4,5 +4,10 @@ Build Colode compiler:
 Run tests:
 	./tester.sh
 
+Can use Makefile:
+        make -> to build
+        make clean -> to clean
+        make tester -> to run tests
+
 Current issues:
 	Comments in the same line as code will not be parsed correctly.
