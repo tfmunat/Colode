@@ -60,7 +60,7 @@ typ:
   | FLOAT { Float }
   | VOID  { Void  }
   | CHAR  { Char }
-  | LIST  { List }
+  | typ LIST  { List($1) }
   | STRING { String }
   | IMAGE  { Image }
   | PIXEL  { Pixel }
