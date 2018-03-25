@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type typ = Int | Bool | Float | Void | Char | List of typ | String | Image | Pixel | Matrix
+type typ = Int | Bool | Float | Void | Char | ArrayList of typ | String | Image | Pixel | Matrix
 
 type bind = typ * string
 
@@ -78,7 +78,7 @@ let rec string_of_typ = function
   | Float -> "float"
   | Void -> "void"
   | Char -> "char"
-  | List(t) -> string_of_typ t ^ "list"
+  | ArrayList(t) -> string_of_typ t ^ "list"
   | String -> "string"
   | Image -> "image"
   | Pixel -> "pixel"

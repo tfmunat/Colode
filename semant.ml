@@ -33,7 +33,7 @@ let check (stmts, functions) =
         try StringMap.find name map
         with Not_found -> raise( Failure("Undeclared variable: " ^ name))
     in
-    let check_var_decl var map = 
+    (* UNUSED let check_var_decl var map = 
         let void_err = "Illegal void " ^ snd var 
             and dup_err = "Duplicate declaration: " ^ snd var
         in match var with
@@ -41,7 +41,7 @@ let check (stmts, functions) =
         | (typ, id) -> match (StringMap.find_opt id map) with
               Some v -> raise (Failure dup_err)
             | None -> SDeclare(typ, id)
-    in
+    in *)
         let check_type_equal lvaluet rvaluet err =
         if lvaluet = rvaluet then lvaluet else raise (Failure err)
     in
@@ -112,7 +112,7 @@ let check (stmts, functions) =
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignDivide((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
-    | DeclAssign (left_t, id, e) as ex ->
+    | DeclAssign (left_t, id, e) ->
         let (right_t, sx, map') = check_expr map e  in
         let err = "illegal argument found " ^ string_of_typ left_t ^ ", types must match in assignment." in
         let ty = check_type_equal left_t right_t err in
@@ -143,7 +143,7 @@ let check (stmts, functions) =
                 let clean_body = List.map (fun (t, sx, _) -> (t,sx)) sbody in
                 (match_type, SArray(clean_body), map)
             else make_err err
-    | ArrayIndex(name, idx) as exp ->
+    | ArrayIndex(name, idx) ->
         let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
         let (typ, sid, map') = match name with
@@ -151,7 +151,7 @@ let check (stmts, functions) =
             | _ -> make_err cannot_idx_err
         in
         let inner_typ = match typ with
-              Ast.List as lt -> lt
+              ArrayList lt -> lt
             | Pixel -> Float (* TODO support 1d index on matrix, inner type is then List *)
             | _ -> make_err cannot_idx_err
         in 
@@ -162,7 +162,7 @@ let check (stmts, functions) =
         let arr = (typ, sid) in
         let index = (idx_type, si) in
         (inner_typ, SArrayIndex(arr, index), map'')
-    | Array2DIndex (name, idx, idx2) as exp ->
+    | Array2DIndex (name, idx, idx2) ->
         let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
         let (typ, sid, map') = match name with
@@ -201,12 +201,15 @@ let check (stmts, functions) =
       Expr e -> let (ty, sx, map') = check_expr map e in (SExpr (ty, sx), map')
     | Return e -> let (ty, sx, map') = check_expr map e in
         let return_from_global_err = "Cannot return " ^ string_of_expr e ^ " from global context" in
-        match ctxt.current_func with
-          None -> if ty <> Void then make_err return_from_global_err else (SReturn(ty, sx), map')
-        | Some(fd) -> let invalid_return_err = "return gives " ^ string_of_typ ty ^ " expected " ^ string_of_typ func.typ ^ " in " ^ string_of_expr e in 
-            if ty = func.typ then (SReturn((ty, sx)), map') 
-            else make_err return_from_global_err
-    | If(pred, then_block, else_block) -> (SIf(check_bool_expr map pred, fst (check_stmt then_block map), fst(check_stmt else_block map)), map)
+        (match ctxt.current_func with
+                  None -> if ty <> Void then make_err return_from_global_err else (SReturn(ty, sx), map')
+                | Some(fd) -> (* UNUSED let invalid_return_err = "return gives " ^ string_of_typ ty ^ " expected " ^ string_of_typ fd.typ ^ " in " ^ string_of_expr e in  *)
+                    if ty = fd.typ then (SReturn((ty, sx)), map') 
+                    else make_err return_from_global_err)
+    | If(pred, then_block, else_block) -> 
+        let sthen, _ = check_stmt map then_block ctxt in
+        let selse, _ = check_stmt map else_block ctxt in
+        (SIf(check_bool_expr map pred, sthen, selse), map)
     | For(cursor, iterator, block) -> 
         let invalid_err = "Invalid for loop cursor" in
         let invalid_iterator_err = "Invalid for loop iterator" in
@@ -214,7 +217,7 @@ let check (stmts, functions) =
         let check_iterator map iterator =
             let (ty, sx, map') = check_expr map iterator in
             match ty with
-              List | Pixel | Matrix | String -> (ty, sx, map')
+              ArrayList _ | Pixel | Matrix | String -> (ty, sx, map')
             | _ -> make_err invalid_iterator_err
         in
         let (ty, sx, map') = check_iterator map iterator in
@@ -222,37 +225,40 @@ let check (stmts, functions) =
           Id n -> n | _ -> make_err invalid_err
         in
         if StringMap.mem name map' then make_err err else
-        let new_map = add_var map' name in
-        let (sblock, _) = check_stmt new_map block in
-        (SFor((ty, SId(n)), (ty, sx), sblock), map)
-    | While(p, s) -> SWhile(check_bool_expr map p, fst (check_stmt map s))
+        let it_ty = match ty with
+            ArrayList(t) -> t | Pixel | Matrix -> Float | String -> Char | _ -> make_err invalid_iterator_err
+        in
+        let new_map = add_var map' (it_ty, name) in
+        let (sblock, _) = check_stmt new_map block ctxt in
+        (SFor((ty, SId(name)), (ty, sx), sblock), map)
+    | While(p, s) -> SWhile(check_bool_expr map p, fst (check_stmt map s ctxt)), map
     | Declare(t, id) ->
-        let new_map = add_var map SDeclare(t, id) in
+        let new_map = add_var map (t, id) in
         (SDeclare(t, id), new_map)
     | Block stl -> 
-        let (checked, map') = check_stmt_list stl in
+        let (checked, map') = check_stmt_list map stl ctxt in
         (SBlock(checked), map)
-    and check_stmt_list map sl = match sl with
-        [Return _ as s] -> ([check_stmt s], map)
+    and check_stmt_list map sl (ctxt : stmt_context) = match sl with
+        [Return _ as s] -> ([fst (check_stmt map s ctxt)], map)
         | Return _ :: _   -> raise (Failure "nothing may follow a return")
-        | Block sl :: ss  -> check_stmt_list (sl @ ss) (* Flatten blocks *)
-        | s :: ss         -> let (sst, map') = check_stmt map s in
-            let (slist, map'') = check_stmt_list map' ss in
+        | Block sl :: ss  -> check_stmt_list map (sl @ ss) ctxt(* Flatten blocks *)
+        | s :: ss         -> let (sst, map') = check_stmt map s ctxt in
+            let (slist, map'') = check_stmt_list map' ss ctxt in
             (sst :: slist, map'')
         | []              -> ([], map)
     in
     let check_func fd = 
-        let symbols = List.fold_left (fun m (ty, name) -> StringMap.add name SDeclare(ty, name) m) StringMap.empty fd.formals
+        let symbols = List.fold_left (fun m (ty, name) -> StringMap.add name (ty, name) m) StringMap.empty fd.formals
         in 
         {
             styp = fd.typ;
             sfname = fd.fname;
             sformals = fd.formals;
-            sbody = let (blk, map') = check_stmt symbols Block(fd.body) in
+            sbody = let (blk, map') = check_stmt symbols (Block(fd.body)) {current_func= Some fd} in
                   match blk with SBlock(s1) -> s1 
                 | _ -> make_err "Internal err... block didn't become block?";
         }
     in
     let sfunctions = List.map check_func functions in
-    let (sstmt, _) = check_stmt_list StringMap.empty stmts in
+    let (sstmt, _) = check_stmt_list StringMap.empty stmts {current_func= None} in
     (sstmt, sfunctions)
