@@ -18,8 +18,8 @@
 ### Run Hello World
 ------
 Two different ways:
-        make hw
-	./helloworld.sh
+		make hw
+		./helloworld.sh
 
 ### Commands
 ------
