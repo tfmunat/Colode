@@ -5,6 +5,7 @@ open Sast
 module StringMap = Map.Make(String)
 
 let translate (statements, functions) =
+	let make_err err = raise (Failure "Codegen error: "^err) in
 	let context = L.global_context () in
 	(* Primitive types *)
 	let i32_t = L.i32_type context
@@ -45,4 +46,23 @@ let translate (statements, functions) =
 		in
 		List.fold_left func_decl StringMap.empty functions
 	in
-	
+	let lookup map name = try StringMap.find n map
+		with Not_found -> make_err "Couldn't find "^name
+    in
+    let rec expr map builder (typ, sx) = match sx with
+	  SLiteral i -> L.const_int i32_t i
+	| SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
+	| SFliteral l -> L.const_float_of_string float_t l
+	| SCharLiteral c -> L.const_int i8_t (Char.code c)
+	| SStringLiteral s -> L.const_string context s
+	| SNoexpr -> L.const_int i32_t 0
+	| SId s -> L.build_load (lookup map s) s builder
+	| SCall ("print", [ex]) -> L.build_call print_func [|expr builder ex|] "puts" builder
+	| _ -> make_err "Unimplemented"
+	in
+	let add_terminal builder fn = match L.block_terminator (L.insertion_block builder) with
+	  Some _ -> ()
+	| None -> ignore (f builder) in
+	let rec stmt map builder s = match s with
+	  SBlock sl -> List.fold_left stmt map builder sl
+	| SExpr ex -> let 
