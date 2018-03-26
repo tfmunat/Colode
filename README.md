@@ -15,11 +15,12 @@
 	./tester.sh
 
 
-### Run Hello World
+### Compile Hello World
 ------
-Two different ways:
-		make hw
-		./helloworld.sh
+	make hw
+		
+### Automation and validation
+	./helloworld.sh
 
 ### Commands
 ------
