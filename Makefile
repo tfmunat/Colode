@@ -6,7 +6,7 @@ build:
 .PHONY: clean tester
 
 clean:
-	rm -rf *.cmo *.cmi a.out parser.ml parser.mli scanner.ml _build toplevel.native top
+	rm -rf *.cmo *.cmx *.o *.cmi a.out parser.ml parser.mli scanner.ml _build toplevel.native top
 
 tester:
 	for t in Tests/*.cld; \

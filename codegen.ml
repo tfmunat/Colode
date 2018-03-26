@@ -4,7 +4,6 @@ module A = Ast
 open Sast 
 
 module StringMap = Map.Make(String)
-
 let translate (statements, functions) =
 	let make_err e = raise (Failure e) in
 	let context = L.global_context () in
@@ -23,6 +22,10 @@ let translate (statements, functions) =
 	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t; |] in
 	let pixel_t = L.vector_type float_t 4
 	in
+	(* Internal constants *)
+	let zero = L.const_int (L.i32_type context) 0 in
+	let one = L.const_int (L.i32_type context) 1 in
+	(* Main module *)
 	let code_module = L.create_module context "Colode" in
 	let rec ltype_of_typ = function
 		  A.Int   -> i32_t
@@ -55,10 +58,20 @@ let translate (statements, functions) =
 	| SBoolLit b -> (L.const_int i1_t (if b then 1 else 0), map)
 	| SFliteral l -> (L.const_float_of_string float_t l, map)
 	| SCharLiteral c -> (L.const_int i8_t (Char.code c), map)
-	| SStringLiteral s -> (L.const_string context s, map)
+	| SStringLiteral s -> let alloc = L.build_alloca string_t "" builder in
+		let val_p = L.build_gep alloc [| zero ; zero |] "" builder in
+		let len_p = L.build_gep alloc [| zero ; one |] "" builder in
+		let str = L.const_string context s in
+		let str_len = String.length s in
+		let _ = L.build_store str val_p in
+		let _ = L.build_store len_p (L.const_int i32_t str_len)
+	in (alloc, map)
 	| SNoexpr -> (L.const_int i32_t 0, map)
 	| SId s -> (L.build_load (lookup map s) s builder, map)
-	| SCall ("print", [ex]) -> (L.build_call print_func [|fst (expr map builder ex)|] "puts" builder, map)
+	| SCall ("print", [ex]) -> let s_lval, _ = expr map builder ex in
+		let s = L.build_in_bounds_gep s_lval [| zero; zero |] "" builder in
+		let lo = L.build_load s "" builder in
+		(L.build_call print_func [|lo|] "" builder, map)
 	| _ -> make_err "Unimplemented"
 	in
 	let add_terminal builder fn = match L.block_terminator (L.insertion_block builder) with
@@ -73,5 +86,6 @@ let translate (statements, functions) =
 		let main_ty = L.function_type i32_t [||] in
 		let main_func = L.define_function "main" main_ty code_module in
 		let builder = L.builder_at_end context (L.entry_block main_func) in
-		ignore(stmt StringMap.empty builder (SBlock sl))
+		let () = ignore(stmt StringMap.empty builder (SBlock sl)) in
+		ignore(L.build_ret (L.const_int i32_t 0) builder)
 	in build_main statements; code_module
