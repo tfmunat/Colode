@@ -16,9 +16,9 @@
 
 ### Can use Makefile
 ------
-        make -> to build
-        make clean -> to clean
-        make tester -> to run tests
+    make -> to build
+    make clean -> to clean
+    make tester -> to run tests
 
 ### Current issues
 ------
