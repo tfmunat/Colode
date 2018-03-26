@@ -59,17 +59,18 @@ let translate (statements, functions) =
 	| SFliteral l -> (L.const_float_of_string float_t l, map)
 	| SCharLiteral c -> (L.const_int i8_t (Char.code c), map)
 	| SStringLiteral s -> let alloc = L.build_alloca string_t "" builder in
-		let val_p = L.build_gep alloc [| zero ; zero |] "" builder in
-		let len_p = L.build_gep alloc [| zero ; one |] "" builder in
-		let str = L.const_string context s in
-		let str_len = String.length s in
-		let _ = L.build_store str val_p in
-		let _ = L.build_store len_p (L.const_int i32_t str_len)
+		let str_global = L.build_global_string s "" builder in
+		let str = L.build_bitcast str_global (L.pointer_type i8_t) "" builder in
+		let str_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let str_len = L.const_int i32_t (String.length s) in
+		let len_loc = L.build_struct_gep alloc 1 "" builder in 
+		let _ = L.build_store str str_field_loc builder in
+		let _ = L.build_store str_len len_loc builder
 	in (alloc, map)
 	| SNoexpr -> (L.const_int i32_t 0, map)
 	| SId s -> (L.build_load (lookup map s) s builder, map)
 	| SCall ("print", [ex]) -> let s_lval, _ = expr map builder ex in
-		let s = L.build_in_bounds_gep s_lval [| zero; zero |] "" builder in
+		let s = L.build_struct_gep s_lval 0 "" builder in
 		let lo = L.build_load s "" builder in
 		(L.build_call print_func [|lo|] "" builder, map)
 	| _ -> make_err "Unimplemented"
