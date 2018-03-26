@@ -18,7 +18,8 @@
 ### Compile Hello World
 ------
 	make hw
-		
+
+This test validates that the output of the sample program in `print.colode` is "Hello World!"
 ### Automation and validation
 	./helloworld.sh
 
