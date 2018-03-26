@@ -8,17 +8,25 @@
 
 ### Build Colode compiler
 ------
-	ocamlbuild toplevel.native
+	make
 
 ### Run tests
 ------
 	./tester.sh
 
-### Can use Makefile
+
+### Run Hello World
+------
+Two different ways:
+        make hw
+	./helloworld.sh
+
+### Commands
 ------
     make -> to build
     make clean -> to clean
     make tester -> to run tests
+    make hw -> to build helloworld and compare it to the test suite
 
 ### Current issues
 ------
