@@ -1,7 +1,7 @@
 target: build
 
 build:
-	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis toplevel.native
+	ocamlbuild -quiet -use-ocamlfind -pkgs llvm,llvm.analysis toplevel.native
 
 .PHONY: clean tester
 
