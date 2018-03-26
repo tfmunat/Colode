@@ -102,8 +102,8 @@ member:
  | member DOT ID { $3 :: $1 }
 
 name: ID {Id($1)} 
-  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
-  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
+/*  | ID LBRACE atom RBRACE %prec ONED { ArrayIndex($1,$3) }
+  | ID LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
 
 atom: LITERAL          { Literal($1)              }
   | FLIT       { Fliteral($1)             }
@@ -139,8 +139,8 @@ expr:
   | ID LPAREN args_opt RPAREN { Call($1, $3)        }
   /*| LPAREN expr RPAREN { $2 } */
   | array_lit          { $1 }
-  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
-  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }
+/*  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
+  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }*/
   | ID member     { MemberAccess(Id($1), List.rev $2) }
   | term {$1}
 
