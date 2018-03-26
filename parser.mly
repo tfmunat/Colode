@@ -110,7 +110,7 @@ expr:
   | FLIT	     { Fliteral($1)             }
   | BLIT             { BoolLit($1)              }
   | LITERALCHAR      { CharLiteral($1)          }
-  | LITERALSTRING    { StringLiteral($1)        }
+  | LITERALSTRING    { StringLiteral(String.sub $1 1 ((String.length $1)-2))            } 
   | ID               { Id($1)                   }
   | expr PLUS   expr { Binop($1, Add,   $3)     }
   | expr MINUS  expr { Binop($1, Sub,   $3)     }
