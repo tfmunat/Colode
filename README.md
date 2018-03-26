@@ -8,7 +8,8 @@
 
 ### Build Colode compiler
 ------
-	make
+* Assuming you have the relevant ocamlbuild and ocamlfind packages <br>
+	`make`
 
 ### Run tests
 ------
