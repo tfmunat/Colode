@@ -1,3 +1,4 @@
+
 module L = Llvm
 module A = Ast
 open Sast 
@@ -5,7 +6,7 @@ open Sast
 module StringMap = Map.Make(String)
 
 let translate (statements, functions) =
-	let make_err err = raise (Failure "Codegen error: "^err) in
+	let make_err e = raise (Failure e) in
 	let context = L.global_context () in
 	(* Primitive types *)
 	let i32_t = L.i32_type context
@@ -16,10 +17,10 @@ let translate (statements, functions) =
 		and char_t = L.i8_type context
 	in
 	(* Compound types *)
-	let list_t = fun (inner_typ: lltype) -> L.struct_type context [| L.qualified_pointer_type L.address_space inner_typ; i32_t (*length*); i32_t (*capacity*)|] in
-	let string_t = L.struct_type context [| L.qualified_pointer_type L.address_space char_t; i32_t (*length*); |] in 
-	let matrix_t (width:int) (height:int) = L.array_type (L.array_type width) height in 
-	let image_t (width:int) (height:int) = L.struct_type context [| i32_t (*width*); i32_t (* height *) L.qualified_pointer_type L.address_space (matrix_t width height); L.qualified_pointer_type L.address_space (matrix_t width height); L.qualified_pointer_type L.address_space (matrix_t width height); |] in
+	let list_t = fun (inner_typ: L.lltype) -> L.struct_type context [| L.pointer_type inner_typ; i32_t (*length*); i32_t (*capacity*)|] in
+	let string_t = L.struct_type context [| L.pointer_type char_t; i32_t (*length*); |] in 
+	let matrix_t = L.struct_type context [| L.pointer_type float_t; i32_t (*width*); i32_t (*height*) |]  in 
+	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t; |] in
 	let pixel_t = L.vector_type float_t 4
 	in
 	let code_module = L.create_module context "Colode" in
@@ -35,34 +36,42 @@ let translate (statements, functions) =
 		| A.Matrix -> matrix_t
 		| A.Pixel -> pixel_t
 	in
-	let print_t = L.function_type (L.integer_type context) [| L.qualified_pointer_type L.address_space char_t |] in
-	let print_func = L.declare_function "print" print_t code_module in
+	let print_t = L.function_type i32_t [| L.pointer_type char_t |] in
+	let print_func = L.declare_function "puts" print_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
-			let formal_types = Array.of_list (List.map (fun (t,_) -> ltype_of_typ t) fd.sformals)
+			let formal_types = Array.of_list (List.map (fun (t,_) -> ltype_of_typ t) fd.sformals) in
 			let func_type = L.function_type (ltype_of_typ fd.styp) formal_types in
 			StringMap.add name (L.define_function name func_type code_module, fd) map 
 		in
 		List.fold_left func_decl StringMap.empty functions
 	in
-	let lookup map name = try StringMap.find n map
-		with Not_found -> make_err "Couldn't find "^name
+	let lookup map name : L.llvalue = match StringMap.find_opt name map	with
+	  Some v -> v | None -> make_err ("Couldn't find " ^ name)
     in
     let rec expr map builder (typ, sx) = match sx with
-	  SLiteral i -> L.const_int i32_t i
-	| SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
-	| SFliteral l -> L.const_float_of_string float_t l
-	| SCharLiteral c -> L.const_int i8_t (Char.code c)
-	| SStringLiteral s -> L.const_string context s
-	| SNoexpr -> L.const_int i32_t 0
-	| SId s -> L.build_load (lookup map s) s builder
-	| SCall ("print", [ex]) -> L.build_call print_func [|expr builder ex|] "puts" builder
+	  SLiteral i -> (L.const_int i32_t i, map)
+	| SBoolLit b -> (L.const_int i1_t (if b then 1 else 0), map)
+	| SFliteral l -> (L.const_float_of_string float_t l, map)
+	| SCharLiteral c -> (L.const_int i8_t (Char.code c), map)
+	| SStringLiteral s -> (L.const_string context s, map)
+	| SNoexpr -> (L.const_int i32_t 0, map)
+	| SId s -> (L.build_load (lookup map s) s builder, map)
+	| SCall ("print", [ex]) -> (L.build_call print_func [|fst (expr map builder ex)|] "puts" builder, map)
 	| _ -> make_err "Unimplemented"
 	in
 	let add_terminal builder fn = match L.block_terminator (L.insertion_block builder) with
 	  Some _ -> ()
-	| None -> ignore (f builder) in
+	| None -> ignore (fn builder) in
 	let rec stmt map builder s = match s with
-	  SBlock sl -> List.fold_left stmt map builder sl
-	| SExpr ex -> let 
+	  SBlock sl -> List.fold_left (fun (b, m) s -> stmt m b s) (builder, map) sl
+	| SExpr e -> let (_, m) = (expr map builder e) in (builder, m)
+	| _ -> make_err "Unimplemented"
+	in
+	let build_main sl = 
+		let main_ty = L.function_type i32_t [||] in
+		let main_func = L.define_function "main" main_ty code_module in
+		let builder = L.builder_at_end context (L.entry_block main_func) in
+		ignore(stmt StringMap.empty builder (SBlock sl))
+	in build_main statements; code_module
