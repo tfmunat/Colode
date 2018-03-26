@@ -1,13 +1,20 @@
-Build Colode compiler:
+### Group
+
+
+### Build Colode compiler
+------
 	ocamlbuild toplevel.native
 
-Run tests:
+### Run tests
+------
 	./tester.sh
 
-Can use Makefile:
+### Can use Makefile
+------
         make -> to build
         make clean -> to clean
         make tester -> to run tests
 
-Current issues:
+### Current issues
+------
 	Comments in the same line as code will not be parsed correctly.
