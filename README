@@ -1,4 +1,0 @@
-
-Our sample program is located in the file "print.colode". It contains a program that prints the string "Hello World!" to standard output.
-
-To run the test suite, open a terminal and run test.sh. This script compiles the sample program and executes it, testing the output (using grep) to ensure that it matches "Hello World!".

@@ -5,7 +5,7 @@ make clean
 make
 $compiler -l "print.colode" > "test.ll" &&
 if lli test.ll | tee | grep -q "Hello World!"; then
-	echo "print.colode test successful!"
+	echo "print.colode test successful! Output reads: Hello World!"
 else
 	echo "print.colode test failed; output did not match 'Hello World!'"
 fi
