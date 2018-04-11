@@ -6,8 +6,7 @@ let digit = ['0' - '9']
 let digits = digit+
 let char_lex = ['\x00' - '\x7F']
 let string_lex = char_lex+
-let strings = '\"' string_lex '\"'
-let mystring = (([' '-'!''#'-'['']'-'~'] |'\\' ['\\' '"' 'n' 'r' 't'])* as s)
+let strings = '"' ( [^ '\\' '"'] | '\\' [^ '\n'] ) * '"'  
 
 rule token = parse
   [' ' '\r' '\t' '\n'] { token lexbuf } (* Whitespace *)
@@ -68,7 +67,6 @@ rule token = parse
 | digits as lxm { LITERAL(int_of_string lxm) }
 | digits '.'  digit* ( ['e' 'E'] ['+' '-']? digits )? as lxm { FLIT(lxm) }
 | strings as s { LITERALSTRING(s) }
-| '"' mystring as s '"'   { LITERALSTRING(s) }
 | '\'' (char_lex as c) '\'' { LITERALCHAR(c) }
 | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 | eof { EOF }
