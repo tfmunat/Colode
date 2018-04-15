@@ -88,8 +88,8 @@ stmt:
   | IF expr stmt ELIF expr stmt %prec NOELSE   { If($2, $3, If($5, $6, Block([])))  }
   | IF expr stmt ELIF expr stmt ELSE stmt  { If($2, $3, If($5, $6, $8))  }
   | IF expr stmt ELSE stmt  %prec NOELIF  { If($2, $3, $5)        }
-  | FOR expr IN expr stmt
-                                            { For($2, $4, $5)   }
+  | FOR expr_opt SEMI expr SEMI expr_opt stmt
+                                            { For($2, $4, $6, $7)   }
   | WHILE expr stmt           { While($2, $3)         }
   | vdecl                                   { Declare(fst $1, snd $1) }
   | compound_stmt {Block(List.rev $1)}

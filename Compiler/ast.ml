@@ -36,7 +36,7 @@ type stmt =
   | Expr of expr
   | Return of expr
   | If of expr * stmt * stmt
-  | For of expr * expr * stmt
+  | For of expr * expr * expr * stmt
   | While of expr * stmt
   | Declare of typ * string
 
@@ -118,8 +118,8 @@ let rec string_of_stmt = function
   | If(e, s, Block([])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
-  | For(e1, e2, e3) ->
-      "for " ^ string_of_expr e1  ^ " in " ^ string_of_expr e2  ^ string_of_stmt e3
+  | For(e1, e2, e3, st) ->
+      "for " ^ string_of_expr e1  ^ " ; " ^ string_of_expr e2 ^ " ; "  ^ string_of_expr ^" "^ string_of_stmt st
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
   | Declare(t, s) -> (string_of_typ t) ^ " " ^ s
 

@@ -165,7 +165,7 @@ let translate (statements, functions) =
 		(L.build_call print_func [|lo|] "" builder, map, builder)
 	(*Add rest of built-in functions here *)
 	| SCall (name, exl) -> let (ldef, fd) = StringMap.find name function_decls in
-		let args = List.map (fun (a,b) -> a) List.rev (List.map (expr map builder this) (List.rev exl)) in
+		let args = List.map (fun (a,b,c) -> a) List.rev (List.map (expr map builder this) (List.rev exl)) in
 		let call = L.build_call ldef (Array.of_list args) "" builder in
 		(call, map, builder)
 	| SAssign(lex, rex) -> let rval, m', builder = expr map builder this rex in
@@ -335,13 +335,28 @@ let translate (statements, functions) =
 	  Some _ -> ()
 	| None -> ignore (fn builder) in
 	let rec stmt map builder (this:llvalue) (*Llvm func def*) s = match s with
-	  SBlock sl -> let b, _ = List.fold_left (fun (b, m) s -> stmt m b this s) (builder, map) sl in
+	  SBlock sl -> 
+	  	let b, _ = List.fold_left (fun (b, m) s -> stmt m b this s) (builder, map) sl in
 	  	(b, map)
-	| SExpr e -> let (_, m, builder) = (expr map builder this e) in (builder, m)
-	| SDeclare(t, name) -> let l_type = ltype_of_typ t in
+	| SExpr e -> 
+		let (_, m, builder) = (expr map builder this e) in (builder, m)
+	| SDeclare(t, name) -> 
+		let l_type = ltype_of_typ t in
 		let addr = L.build_alloca l_type name builder in
 		let m' = StringMap.add name addr map in
 		(builder, m')
+	| SIf(pred, then_stmt, else_stmt) -> 
+		let bool_val, m', builder = expr map builder this pred in
+		let merge_bb = L.append_block context "merge" this in
+		let branch_ins = L.build_br merge_bb in
+		let then_bb = L.append_block context "then" this in
+		let then_builder, m'' = stmt m' (L.builder_at_end context then_bb) this then_stmt in
+		let () = add_terminal then_builder branch_ins in
+		let else_bb = L.append_block context "else" this in
+		let else_builder, m'' = stmt m' (L.builder_at_end context else_bb) this else_stmt in
+		let () = add_terminal else_builder branch_ins in
+		let _ = L.build_cond_br bool_val then_bb else_bb builder in 
+		(L.builder_at_end context merge_bb, m')
 	| SWhile(predicate, body) ->
 		let pred_bb = L.append_block context "while" this in
 		let _ = L.build_br pred_bb builder in
@@ -352,7 +367,8 @@ let translate (statements, functions) =
 		let bool_val, m'', pred_bldr = expr m' pred_bldr this predicate in
 		let merge_bb = L.append_block context "merge" this in
 		let _ = L.build_cond_br bool_val body_bb merge_bb pred_bldr in
-		(L.builder_at_end, m'')
+		(L.builder_at_end context merge_bb, m'')
+	| SFor(e1, e2, e3, body) -> stmt map builder this ( SBlock [SExpr e1 ; SWhile (e2, SBlock [body ; SExpr e3]) ] )
 	| _ -> make_err "Unimplemented"
 	in
 	let build_main sl = 

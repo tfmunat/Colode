@@ -212,8 +212,8 @@ let check (stmts, functions) =
         let sthen, _ = check_stmt map then_block ctxt in
         let selse, _ = check_stmt map else_block ctxt in
         (SIf(check_bool_expr map pred, sthen, selse), map)
-    | For(cursor, iterator, block) -> 
-        let invalid_err = "Invalid for loop cursor" in
+    | For(e1, e2, e3, st) -> 
+        (* let invalid_err = "Invalid for loop cursor" in
         let invalid_iterator_err = "Invalid for loop iterator" in
         let err = "Name of for loop cursor already in use:" ^ string_of_expr cursor in
         let check_iterator map iterator =
@@ -231,8 +231,10 @@ let check (stmts, functions) =
             ArrayList(t) -> t | Pixel | Matrix -> Float | String -> Char | _ -> make_err invalid_iterator_err
         in
         let new_map = add_var map' (it_ty, name) in
-        let (sblock, _) = check_stmt new_map block ctxt in
-        (SFor((ty, SId(name)), (ty, sx), sblock), map)
+        let (sblock, _) = check_stmt new_map block ctxt in *)
+        let (ty1, sx1, m') = check_expr map e1
+        let (ty3, sx3, m'') = check_expr m' e3
+        SFor((ty1,sx1), check_bool_expr map e2, (ty3, sx3), fst (check_stmt map st ctxt)), map
     | While(p, s) -> SWhile(check_bool_expr map p, fst (check_stmt map s ctxt)), map
     | Declare(t, id) ->
         let new_map = add_var map (t, id) in
