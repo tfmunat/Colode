@@ -68,6 +68,8 @@ let check (stmts, functions) =
         let ty = match op with
           Add | Sub | Mult | Div | Exp when same && t1 = Int   -> Int
           | Add | Sub | Mult | Div | Exp when same && t1 = Float -> Float
+          | Add when same && t1 = Char -> Char
+          | Add when same && t1 = String -> String
           | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
           | Equal | Neq            when same               -> Bool
           | Less | Leq | Greater | Geq

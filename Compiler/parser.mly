@@ -31,7 +31,8 @@
 %%
 
 program:
-  decls EOF { $1 }
+  decls EOF { let s, f = $1 in
+    let s = List.rev s in (s, f) }
 
 decls:
    /* nothing */ { ([], [])               }
