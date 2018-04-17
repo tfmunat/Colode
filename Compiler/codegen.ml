@@ -168,9 +168,9 @@ let translate (statements, functions) =
 		let pred = L.build_icmp L.Icmp.Eq len zero "" builder in
 		let builder = genIf builder this pred 
 			(*Then*)
-			(fun b -> let _ = L.build_store (L.const_pointer_null l_type) data_field_loc b in b )
+			(fun b -> let _ = L.build_store (L.const_bitcast (L.const_pointer_null i8_t) (L.pointer_type i8_t)) data_field_loc b in b )
 			(*Else*)
-			(fun b -> let alloc = L.build_array_alloca l_type len "" builder in
+			(fun b -> let alloc = L.build_array_alloca i8_t len "" builder in
 				let _ = L.build_store alloc data_field_loc b in b )
 		in
 		let data_loc = L.build_load data_field_loc "" builder in
@@ -199,7 +199,8 @@ let translate (statements, functions) =
 		in
 		let _ = L.build_store data_loc data_field_loc builder in
 		let _ = L.build_store len len_loc builder in
-		alloc, builder
+		let value = L.build_load alloc "" builder in
+		value, builder
 	in
 	let binop_str_equal (this: L.llvalue) (*Llvm func def*) lv rv name builder : L.llvalue * L.llbuilder =
 		let ldata_field_loc = L.build_struct_gep lv 0 "" builder in
@@ -212,7 +213,7 @@ let translate (statements, functions) =
 		let rlen = L.build_load rlen_loc "" builder in
 		let pred = L.build_icmp L.Icmp.Ne rlen llen "" builder in
 		(* let data_loc = L.build_alloca (pointer_type ty) "" builder *)
-		let is_equal = L.build_alloca i1_t name builder in
+		let is_equal = L.build_alloca i1_t "is_equal" builder in
 		let iter = L.build_alloca i32_t "iter" builder in
 		let _ = L.build_store zero iter builder in
 		let _ = L.build_store true_ is_equal builder in
@@ -220,7 +221,7 @@ let translate (statements, functions) =
 			(*Then*)
 			(fun b -> let _ = L.build_store false_ is_equal builder in b ) 
 			(*Else*)
-			(fun b -> genWhile builder this
+			(fun b -> genWhile b this
 				(*pred*)
 				(fun b -> let i = L.build_load iter "" b in
 					(L.build_icmp L.Icmp.Slt i llen "" b, b) )
@@ -467,6 +468,6 @@ let translate (statements, functions) =
 		let main_ty = L.function_type i32_t [||] in
 		let main_func = L.define_function "main" main_ty code_module in
 		let builder = L.builder_at_end context (L.entry_block main_func) in
-		let () = ignore(stmt StringMap.empty builder main_func (SBlock sl)) in
+		let builder, _ = stmt StringMap.empty builder main_func (SBlock sl) in
 		ignore(L.build_ret (L.const_int i32_t 0) builder)
 	in build_main statements; code_module
