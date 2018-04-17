@@ -1,0 +1,3 @@
+string greeting = "Hello" ;
+string g = greeting + " World!";
+print(g);
