@@ -7,7 +7,7 @@ let () =
 	("-a", Arg.Unit (set_action Ast), "Print the AST");
 	("-s", Arg.Unit (set_action Sast), "Print the SAST");
 	("-l", Arg.Unit (set_action LLVM_IR), "Print the generated LLVM IR");
-	] in 
+	] in
 	let usage_msg = "usage: ./colode.native [-a|-s|-l] [file.cld]" in
 	let channel = ref stdin in
 	Arg.parse speclist (fun file -> channel := open_in file) usage_msg; 

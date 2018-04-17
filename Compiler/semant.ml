@@ -232,8 +232,8 @@ let check (stmts, functions) =
         in
         let new_map = add_var map' (it_ty, name) in
         let (sblock, _) = check_stmt new_map block ctxt in *)
-        let (ty1, sx1, m') = check_expr map e1
-        let (ty3, sx3, m'') = check_expr m' e3
+        let (ty1, sx1, m') = check_expr map e1 in
+        let (ty3, sx3, m'') = check_expr m' e3 in
         SFor((ty1,sx1), check_bool_expr map e2, (ty3, sx3), fst (check_stmt map st ctxt)), map
     | While(p, s) -> SWhile(check_bool_expr map p, fst (check_stmt map s ctxt)), map
     | Declare(t, id) ->
