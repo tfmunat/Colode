@@ -15,6 +15,8 @@ let check (stmts, functions) =
     in
     let built_in_funcs = List.fold_left add_func StringMap.empty [
         {typ = Void; fname = "print"; formals = [(String, "arg")]; locals = []; body = [] };
+        {typ = Void; fname = "iprint"; formals = [(Int, "arg")]; locals = []; body = [] };
+        {typ = Void; fname = "fprint"; formals = [(Float, "arg")]; locals = []; body = [] };
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in
@@ -65,15 +67,22 @@ let check (stmts, functions) =
         in let (t2, e2', map'') = check_expr map' e2 
         in
         let same = t1 = t2 in
-        let ty = match op with
-          Add | Sub | Mult | Div | Exp when same && t1 = Int   -> Int
-          | Add | Sub | Mult | Div | Exp when same && t1 = Float -> Float
-          | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
-          | Equal | Neq            when same               -> Bool
-          | Less | Leq | Greater | Geq
-                     when same && (t1 = Int || t1 = Float) -> Bool
-          | And | Or when same && t1 = Bool -> Bool
-          | _ -> make_err ("Illegal binary operator " ^ string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^ string_of_typ t2 ^ " in " ^ string_of_expr ex)
+        let ty = 
+        match t1 with
+        | ArrayList inner -> (match op with
+                  Add -> t1
+                  | _ -> make_err ("Illegal binary operation, cannot perform "^string_of_expr ex^" on lists."))
+        | _ -> match op with
+              Add | Sub | Mult | Div | Exp when same && t1 = Int   -> Int
+              | Add | Sub | Mult | Div | Exp when same && t1 = Float -> Float
+              | Add when same && t1 = Char -> Char
+              | Add when same && t1 = String -> String
+              | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
+              | Equal | Neq            when same               -> Bool
+              | Less | Leq | Greater | Geq
+                         when same && (t1 = Int || t1 = Float) -> Bool
+              | And | Or when same && t1 = Bool -> Bool
+              | _ -> make_err ("Illegal binary operator " ^ string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^ string_of_typ t2 ^ " in " ^ string_of_expr ex)
         in (ty, SBinop((t1, e1'), op, (t2, e2')), map'')
     | Assign(name, e) as ex -> 
         let err = "illegal assignment " ^ string_of_expr ex in
@@ -86,7 +95,7 @@ let check (stmts, functions) =
         let (right_t, sx, map'') = check_expr map' e in
         let ty = check_type_equal left_t right_t err
         in (match ty with
-                  Int | Float | Matrix | String -> (ty, SAssignAdd((left_t, sname), (right_t, sx)), map'')
+                  Int | Float | Matrix | String -> (ty, SAssign((left_t, sname), (left_t, SBinop((left_t, sname), Add, (right_t, sx)))), map'')
                 | _ -> make_err err)
     | AssignMinus (name, e) as ex -> 
         let err = "illegal assign-minus " ^ string_of_expr ex in
@@ -112,9 +121,9 @@ let check (stmts, functions) =
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignDivide((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
-    | DeclAssign (left_t, id, e) ->
+    | DeclAssign (left_t, id, e) as ex ->
         let (right_t, sx, map') = check_expr map e  in
-        let err = "illegal argument found " ^ string_of_typ left_t ^ ", types must match in assignment." in
+        let err = "illegal argument found. LHS is " ^ string_of_typ left_t ^ ", while RHS is "^string_of_typ right_t^", types must match in assignment for "^string_of_expr ex  in
         let ty = check_type_equal left_t right_t err in
         let new_map = add_var map' (ty, id) in
         let right = (right_t, sx) in
@@ -141,7 +150,7 @@ let check (stmts, functions) =
             let correct = List.for_all (fun (t, _, _) -> t = match_type) sbody in
             if correct then 
                 let clean_body = List.map (fun (t, sx, _) -> (t,sx)) sbody in
-                (match_type, SArray(clean_body), map)
+                (ArrayList match_type, SArray(clean_body), map)
             else make_err err
     | ArrayIndex(name, idx) ->
         let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
@@ -210,8 +219,8 @@ let check (stmts, functions) =
         let sthen, _ = check_stmt map then_block ctxt in
         let selse, _ = check_stmt map else_block ctxt in
         (SIf(check_bool_expr map pred, sthen, selse), map)
-    | For(cursor, iterator, block) -> 
-        let invalid_err = "Invalid for loop cursor" in
+    | For(e1, e2, e3, st) -> 
+        (* let invalid_err = "Invalid for loop cursor" in
         let invalid_iterator_err = "Invalid for loop iterator" in
         let err = "Name of for loop cursor already in use:" ^ string_of_expr cursor in
         let check_iterator map iterator =
@@ -229,8 +238,10 @@ let check (stmts, functions) =
             ArrayList(t) -> t | Pixel | Matrix -> Float | String -> Char | _ -> make_err invalid_iterator_err
         in
         let new_map = add_var map' (it_ty, name) in
-        let (sblock, _) = check_stmt new_map block ctxt in
-        (SFor((ty, SId(name)), (ty, sx), sblock), map)
+        let (sblock, _) = check_stmt new_map block ctxt in *)
+        let (ty1, sx1, m') = check_expr map e1 in
+        let (ty3, sx3, m'') = check_expr m' e3 in
+        SFor((ty1,sx1), check_bool_expr map e2, (ty3, sx3), fst (check_stmt map st ctxt)), map
     | While(p, s) -> SWhile(check_bool_expr map p, fst (check_stmt map s ctxt)), map
     | Declare(t, id) ->
         let new_map = add_var map (t, id) in

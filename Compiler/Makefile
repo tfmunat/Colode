@@ -1,7 +1,9 @@
 target: build
 
 build:
-	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis toplevel.native
+	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis toplevel.native -cflag -g -tag debug
+debug:
+	ocamlbuild -use-ocamlfind -pkgs llvm toplevel.byte -cflag -g -tag debug
 
 .PHONY: clean tester hw
 

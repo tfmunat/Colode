@@ -31,7 +31,8 @@
 %%
 
 program:
-  decls EOF { $1 }
+  decls EOF { let s, f = $1 in
+    let s = List.rev s in (s, f) }
 
 decls:
    /* nothing */ { ([], [])               }
@@ -87,8 +88,8 @@ stmt:
   | IF expr stmt ELIF expr stmt %prec NOELSE   { If($2, $3, If($5, $6, Block([])))  }
   | IF expr stmt ELIF expr stmt ELSE stmt  { If($2, $3, If($5, $6, $8))  }
   | IF expr stmt ELSE stmt  %prec NOELIF  { If($2, $3, $5)        }
-  | FOR expr IN expr stmt
-                                            { For($2, $4, $5)   }
+  | FOR expr_opt SEMI expr SEMI expr_opt SEMI stmt
+                                            { For($2, $4, $6, $8)   }
   | WHILE expr stmt           { While($2, $3)         }
   | vdecl                                   { Declare(fst $1, snd $1) }
   | compound_stmt {Block(List.rev $1)}
@@ -97,10 +98,10 @@ expr_opt:
   |  { Noexpr }
   | expr          { $1 }
 
-member: 
+/*member: 
  DOT ID { [$2] } 
  | member DOT ID { $3 :: $1 }
-
+*/
 name: ID {Id($1)} 
 /*  | ID LBRACE atom RBRACE %prec ONED { ArrayIndex($1,$3) }
   | ID LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
@@ -139,9 +140,9 @@ expr:
   | ID LPAREN args_opt RPAREN { Call($1, $3)        }
   /*| LPAREN expr RPAREN { $2 } */
   | array_lit          { $1 }
-/*  | expr LBRACE expr RBRACE %prec ONED { ArrayIndex($1,$3) }
-  | expr LBRACE expr RBRACE LBRACE expr RBRACE { Array2DIndex($1,$3, $6) }*/
-  | ID member     { MemberAccess(Id($1), List.rev $2) }
+  | ID DOT atom  { ArrayIndex(Id($1),$3) }
+  /*| atom LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
+  /*| ID member     { MemberAccess(Id($1), List.rev $2) }*/
   | term {$1}
 
 

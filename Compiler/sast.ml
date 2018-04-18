@@ -29,7 +29,7 @@ type sstmt =
   | SExpr of sexpr
   | SReturn of sexpr
   | SIf of sexpr * sstmt * sstmt
-  | SFor of sexpr * sexpr * sstmt
+  | SFor of sexpr * sexpr * sexpr * sstmt
   | SWhile of sexpr * sstmt
   | SDeclare of typ * string
 
@@ -80,8 +80,8 @@ let rec string_of_sstmt = function
   | SIf(e, s, SBlock([])) -> "if (" ^ string_of_sexpr e ^ ")\n" ^ string_of_sstmt s
   | SIf(e, s1, s2) ->  "if (" ^ string_of_sexpr e ^ ")\n" ^
     string_of_sstmt s1 ^ "else\n" ^ string_of_sstmt s2
-  | SFor(e1, e2, e3) ->
-    "for " ^ string_of_sexpr e1  ^ " in " ^ string_of_sexpr e2  ^ string_of_sstmt e3
+  | SFor(e1, e2, e3, st) ->
+    "for " ^ string_of_sexpr e1  ^ " ; " ^ string_of_sexpr e2 ^ " ; "  ^ string_of_sexpr e3 ^" "^ string_of_sstmt st
   | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_sstmt s
   | SDeclare(t, s) -> (string_of_typ t) ^ " " ^ s
 
