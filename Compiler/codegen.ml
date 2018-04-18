@@ -46,6 +46,8 @@ let translate (statements, functions) =
 	let print_func = L.declare_function "puts" print_t code_module in
 	let pow_t = L.function_type float_t [| float_t; float_t |] in
 	let pow_func = L.declare_function "pow" pow_t code_module in
+	let printf_t = L.var_arg_function_type i32_t [| (L.pointer_type char_t)|] in
+	let printf_func = L.declare_function "printf" printf_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -104,29 +106,31 @@ let translate (statements, functions) =
 		(L.builder_at_end context merge_bb)	in
 	let binop_array_concat ty (this: L.llvalue) (*Llvm func def*) lv rv name builder : L.llvalue * L.llbuilder = (* array + array = new array *)
     	let l_type = ltype_of_typ ty in
-    	let alloc = L.build_alloca l_type name builder in
+    	let alloc = L.build_alloca (list_t l_type) name builder in
 		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
 		let len_loc = L.build_struct_gep alloc 1 "" builder in
 		let cap_loc = L.build_struct_gep alloc 2 "" builder in
-		let ldata_field_loc = L.build_struct_gep lv 0 "" builder in
-		let ldata_loc = L.build_load ldata_field_loc "" builder in
-		let llen_loc = L.build_struct_gep lv 1 "" builder in
-		let llen = L.build_load llen_loc "" builder in
-		let rdata_field_loc = L.build_struct_gep rv 0 "" builder in
-		let rdata_loc = L.build_load rdata_field_loc "" builder in
-		let rlen_loc = L.build_struct_gep rv 1 "" builder in
-		let rlen = L.build_load rlen_loc "" builder in
+		(* let ldata_field_loc = L.build_struct_gep lv 0 "" builder in *)
+		(* let llen_loc = L.build_struct_gep lv 1 "" builder in *)
+		(* let rdata_field_loc = L.build_struct_gep rv 0 "" builder in *)
+		(* let rlen_loc = L.build_struct_gep rv 1 "" builder in *)
+		let ldata_loc = L.build_extractvalue lv 0 "" builder in
+		let llen = L.build_extractvalue lv 1 "" builder in
+		let rdata_loc = L.build_extractvalue rv 0 "" builder in
+		let rlen = L.build_extractvalue rv 1 "" builder in
 		let len = L.build_add llen rlen "" builder in
+		(* let () = L.print_module "codegen.out" code_module in
+		let () = L.dump_module code_module in *)
 		let cap = L.build_mul len (const_i32_of 2) "" builder in
 		let pred = L.build_icmp L.Icmp.Eq cap zero "" builder in
-		let data_loc = L.build_alloca (L.pointer_type l_type) "" builder in
 		let builder = genIf builder this pred 
 			(*Then*)
-			(fun b -> let _ = L.build_store (L.const_pointer_null l_type) data_loc b in b )
+			(fun b -> let _ = L.build_store (L.const_bitcast (L.const_pointer_null l_type) (L.pointer_type l_type)) data_field_loc b in b )
 			(*Else*)
 			(fun b -> let alloc = L.build_array_alloca l_type cap "" builder in
-				let _ = L.build_store alloc data_loc b in b )
+				let _ = L.build_store alloc data_field_loc b in b )
 		in
+		let data_loc = L.build_load data_field_loc "" builder in
 		let iter = L.build_alloca i32_t "iter" builder in
 		let _ = L.build_store zero iter builder in
 		let builder = genWhile builder this 
@@ -137,22 +141,24 @@ let translate (statements, functions) =
 			(fun b ->
 				let i = L.build_load iter "" b in
 				let use_left = L.build_icmp L.Icmp.Slt i llen "" b in
-				let lgep = L.build_gep ldata_loc [|zero; i |] "" b in
+				let lgep = L.build_gep ldata_loc [| i |] "" b in
 				let rindex = L.build_sub i llen "" b in
-				let rgep = L.build_gep rdata_loc [|zero; rindex |] "" b in
+				let rgep = L.build_gep rdata_loc [| rindex |] "" b in
 				let gep = L.build_select use_left lgep rgep "" b in
 				let value = L.build_load gep "" b in
-				let new_addr = L.build_gep data_loc [|zero; i|] "" b in
+				let new_addr = L.build_gep data_loc [|i|] "" b in
 				let _ = L.build_store value new_addr b in
+				let incr = L.build_add i one "" b in
+				let _ = L.build_store incr iter b in 
 			b)
 		in
 		let _ = L.build_store data_loc data_field_loc builder in
 		let _ = L.build_store len len_loc builder in
 		let _ = L.build_store cap cap_loc builder in
-		alloc, builder
+		let value = L.build_load alloc "" builder in
+		value, builder
 	in
 	let binop_str_concat (this: L.llvalue) (*Llvm func def*) lv rv name builder : L.llvalue * L.llbuilder =
-		let l_type = string_t in
 		let alloc = L.build_alloca string_t name builder in
 		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
 		let len_loc = L.build_struct_gep alloc 1 "" builder in
@@ -184,8 +190,6 @@ let translate (statements, functions) =
 			(fun b ->
 				let i = L.build_load iter "" b in
 				let use_left = L.build_icmp L.Icmp.Slt i llen "" b in
-(* 		let () = L.print_module "codegen.out" code_module in
-		let () = L.dump_module code_module in *)
 				let lgep = L.build_gep ldata_loc [|i |] "" b in
 				let rindex = L.build_sub i llen "" b in
 				let rgep = L.build_gep rdata_loc [| rindex |] "" b in
@@ -203,23 +207,18 @@ let translate (statements, functions) =
 		value, builder
 	in
 	let binop_str_equal (this: L.llvalue) (*Llvm func def*) lv rv name builder : L.llvalue * L.llbuilder =
-		let ldata_field_loc = L.build_struct_gep lv 0 "" builder in
-		let ldata_loc = L.build_load ldata_field_loc "" builder in
-		let llen_loc = L.build_struct_gep lv 1 "" builder in
-		let llen = L.build_load llen_loc "" builder in
-		let rdata_field_loc = L.build_struct_gep rv 0 "" builder in
-		let rdata_loc = L.build_load rdata_field_loc "" builder in
-		let rlen_loc = L.build_struct_gep rv 1 "" builder in
-		let rlen = L.build_load rlen_loc "" builder in
+		let ldata_loc = L.build_extractvalue lv 0 "" builder in
+		let llen = L.build_extractvalue lv 1 "" builder in
+		let rdata_loc = L.build_extractvalue rv 0 "" builder in
+		let rlen = L.build_extractvalue rv 1 "" builder in
 		let pred = L.build_icmp L.Icmp.Ne rlen llen "" builder in
-		(* let data_loc = L.build_alloca (pointer_type ty) "" builder *)
 		let is_equal = L.build_alloca i1_t "is_equal" builder in
 		let iter = L.build_alloca i32_t "iter" builder in
 		let _ = L.build_store zero iter builder in
 		let _ = L.build_store true_ is_equal builder in
 		let builder = genIf builder this pred 
 			(*Then*)
-			(fun b -> let _ = L.build_store false_ is_equal builder in b ) 
+			(fun b -> let _ = L.build_store false_ is_equal b in b ) 
 			(*Else*)
 			(fun b -> genWhile b this
 				(*pred*)
@@ -227,8 +226,8 @@ let translate (statements, functions) =
 					(L.build_icmp L.Icmp.Slt i llen "" b, b) )
 				(*body*)
 				(fun b -> let i = L.build_load iter "" b in
-					let litem_loc = L.build_gep ldata_loc [| zero; i |] "" b in 
-					let ritem_loc = L.build_gep rdata_loc [| zero; i |] "" b in
+					let litem_loc = L.build_gep ldata_loc [| i |] "" b in 
+					let ritem_loc = L.build_gep rdata_loc [| i |] "" b in
 					let lchar = L.build_load litem_loc "" b in 
 					let rchar = L.build_load ritem_loc "" b in
 					let pred = L.build_icmp L.Icmp.Ne rchar lchar "" b in
@@ -236,9 +235,13 @@ let translate (statements, functions) =
 						(*then*)
 						(fun b -> let _ = L.build_store false_ is_equal b in b) 
 						(fun b -> b)  
-					in b )
+					in
+					let incr = L.build_add i one "" b in
+					let _ = L.build_store incr iter b in  b )
 			)
-		in is_equal, builder
+		in
+		let eq = L.build_load is_equal "" builder in
+		(eq, builder)
 	in
     let rec expr map builder (this: L.llvalue) (*Llvm func def*) (typ, sx) : (L.llvalue * L.llvalue StringMap.t * L.llbuilder) = match sx with
 	  SLiteral i -> (L.const_int i32_t i, map, builder)
@@ -259,8 +262,20 @@ let translate (statements, functions) =
 	| SId s -> (L.build_load (lookups map s) s builder, map, builder)
 	| SCall ("print", [ex]) -> let s_lval, _, builder = expr map builder this ex in
 		(* let s = L.build_struct_gep s_lval 0 "" builder in *)
-		let lo = L.build_extractvalue s_lval 0 "" builder in
-		(L.build_call print_func [|lo|] "" builder, map, builder)
+		let s = L.build_extractvalue s_lval 0 "" builder in
+		(* let olen = L.build_extractvalue s_lval 1 "" builder in 
+		let len = L.build_add olen one "" builder in
+		let stringz = L.build_array_alloca i8_t len "" builder in  //*alloc space for null-terminated string
+		let _ = L.build_store s stringz builder in
+		let terminal = L.build_gep stringz [| olen |] "" builder in
+		let _ = L.build_store zero terminal in *)
+		(L.build_call print_func [|s|] "" builder, map, builder)
+	| SCall ("iprint", [ex]) -> let s_lval, _, builder = expr map builder this ex in
+		let decimal_spec = L.build_global_stringptr "%d" "" builder in
+		(L.build_call printf_func [|decimal_spec; s_lval|] "" builder, map, builder)
+	| SCall ("fprint", [ex]) -> let s_lval, _, builder = expr map builder this ex in
+		let decimal_spec = L.build_global_stringptr "%f" "" builder in
+		(L.build_call printf_func [|decimal_spec; s_lval|] "" builder, map, builder)
 	(*Add rest of built-in functions here *)
 	| SCall (name, exl) -> let (ldef, fd) = StringMap.find name function_decls in
 		let args = List.map (fun (a,b,c) -> a) (List.rev (List.map (expr map builder this) (List.rev exl))) in
@@ -311,7 +326,7 @@ let translate (statements, functions) =
 		in
 		let sto (acc, builder) ex = 
 			let value, m', builder = expr map builder this ex in
-			let item_loc = L.build_gep data_loc [|zero; const_i32_of acc |] "" builder in
+			let item_loc = L.build_gep data_loc [|const_i32_of acc |] "" builder in
 			let _ = L.build_store value item_loc builder in
 			(acc + 1, builder)
 		in
@@ -319,7 +334,8 @@ let translate (statements, functions) =
 		let _ = L.build_store data_loc data_field_loc builder in
 		let _ = L.build_store (const_i32_of len) len_loc builder in
 		let _ = L.build_store (const_i32_of cap) cap_loc builder in
-		(alloc, map, builder)
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
 	| SArrayIndex(id, idx) -> 
 		let name = match snd id with 
 		      SId s -> s
@@ -329,7 +345,7 @@ let translate (statements, functions) =
 		let data_field_loc = L.build_struct_gep a_addr 0 "" builder in
 		let data_loc = L.build_load data_field_loc "" builder in
 		let ival, _, builder = expr map builder this idx in
-		let i_addr = L.build_gep data_loc [| zero; ival |] "" builder in 
+		let i_addr = L.build_gep data_loc [| ival |] "" builder in 
 		let value = L.build_load i_addr "" builder in
 		(value, map, builder)
 	| SArray2DIndex(id, idx, idx2) -> 
@@ -349,7 +365,7 @@ let translate (statements, functions) =
 		let lval, m', builder = expr map builder this lex in
 		let rval, m'', builder = expr m' builder this rex in
 		let ty = fst lex in
-		match ty with
+		(match ty with
 		  A.Int ->
 			(match op with
 				A.Add -> L.build_add lval rval "" builder, map, builder
@@ -415,6 +431,7 @@ let translate (statements, functions) =
 				| _ -> make_err "internal error, cannot perform this operation on characters"
 			)
 		| _ -> make_err "unimplemented"
+		)
 		(* A.Matrix ->
 			( match op with
 				A.Add -> L.build_fadd
@@ -425,7 +442,8 @@ let translate (statements, functions) =
 				| A.Conv ->
 			)
 		*)
-	| _ -> make_err "Unimplemented"
+	| SUnop(_, _) | SAssignAdd(_, _) | SAssignMinus(_, _) | SAssignTimes(_, _) | SAssignDivide(_, _) 
+	| SMemberAccess(_, _) -> make_err "Unimplemented"
 	in
 	let rec stmt map builder (this: L.llvalue) (*Llvm func def*) s = match s with
 	  SBlock sl -> 
