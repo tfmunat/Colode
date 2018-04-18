@@ -15,11 +15,13 @@
 	./tester.sh
 
 
-### Run Hello World
+### Compile Hello World
 ------
-Two different ways:
-		make hw
-		./helloworld.sh
+	make hw
+
+This test validates that the output of the sample program in `print.colode` is "Hello World!"
+### Automation and validation
+	./helloworld.sh
 
 ### Commands
 ------
