@@ -58,6 +58,14 @@ let translate (statements, functions) =
 	let mat_scalar_subtract_func = L.declare_function "_mat_scalar_subtract" mat_scalar_t code_module in
 	let mat_scalar_multiply_func = L.declare_function "_mat_scalar_multiply" mat_scalar_t code_module in
 	let mat_scalar_divide_func = L.declare_function "_mat_scalar_divide" mat_scalar_t code_module in
+	let mat_mat_t = L.function_type void_t [| L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t;|] in
+	let mat_mat_add_func = L.declare_function "_mat_mat_add" mat_mat_t code_module in
+	let mat_mat_subtract_func = L.declare_function "_mat_mat_subtract" mat_mat_t code_module in
+	let mat_mat_multiply_func = L.declare_function "_mat_mat_multiply" mat_mat_t code_module in
+	let mat_mat_divide_func = L.declare_function "_mat_mat_divide" mat_mat_t code_module in
+	let mat_mat_convolute_func = L.declare_function "_mat_mat_convolute" mat_mat_t code_module in
+	let mat_equal_t = L.function_type i1_t [| L.pointer_type matrix_t; L.pointer_type matrix_t|] in
+	let mat_mat_equal_func = L.declare_function "_mat_mat_equal" mat_equal_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -522,15 +530,33 @@ let translate (statements, functions) =
 				in
 				let output_v = L.build_load output "" builder in
 				(output_v, m'', builder)
-			(* | Matrix ->
-			( match op with
-				A.Add -> L.build_fadd
-				| A.Sub -> L.build_fsub
-				| A.Mult -> L.build_fmul
-				| A.Div -> L.build_fdiv 
-				| A.Equal -> L.build_fcmp L.Fcmp.Oeq
-				| A.Conv ->
-			) *)
+			| Matrix ->
+				let rv_p = L.build_alloca matrix_t "" builder in
+				let _ = L.build_store rval rv_p builder in
+				let r_width = L.build_extractvalue rval 1 "" builder in
+				let r_height = L.build_extractvalue rval 2 "" builder in
+				match op with
+				  A.Equal -> L.build_call mat_mat_equal_func [|lv_p; rv_p|] "" builder, m'', builder
+				| _ ->
+					let (o_width, o_height, builder) = M.llvm_output_size op lval rval builder in
+					let size, builder = M.llvm_mat_size o_width o_height "" builder in
+					let output = L.build_alloca matrix_t "" builder in
+					let data_field_loc = L.build_struct_gep output 0 "" builder in
+					let data_loc = L.build_array_alloca float_t size "" builder in
+					let width_loc = L.build_struct_gep output 1 "" builder in
+					let height_loc = L.build_struct_gep output 2 "" builder in
+					let _ = L.build_store data_loc data_field_loc builder in
+					let _ = L.build_store o_width width_loc builder in
+					let _ = L.build_store o_height height_loc builder in
+					let _ = match op with
+						  A.Add -> L.build_call mat_mat_add_func [|lv_p; rv_p; output |] "" builder 
+						| A.Sub -> L.build_call mat_mat_subtract_func [|lv_p; rv_p; output |] "" builder 
+						| A.Mult -> L.build_call mat_mat_multiply_func [|lv_p; rv_p; output |] "" builder 
+						| A.Div -> L.build_call mat_mat_divide_func [|lv_p; rv_p; output |] "" builder 
+						| A.Conv -> L.build_call mat_mat_convolute_func [|lv_p; rv_p; output |] "" builder 
+					in
+					let value = L.build_load output "" builder in
+					(value, m'', builder )
 		| _ -> make_err "unimplemented"
 		)
 	| SUnop(_, _) | SAssignAdd(_, _) | SAssignMinus(_, _) | SAssignTimes(_, _) | SAssignDivide(_, _) 

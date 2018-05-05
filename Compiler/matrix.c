@@ -76,3 +76,53 @@ void _mat_scalar_divide(struct mat* m, double a, struct mat* out) {
 		}
 	}
 }
+
+void _mat_mat_add(struct mat* l, struct mat* r, struct mat* out) {
+	if ((l->width != r->width) || (l->height != r->height)) {
+		printf("ERROR: Illegal attempt to add %dx%d matrix and %dx%d matrix.", l->height, l->width, r->height, r->width);
+	}
+	else {
+		for (int i = 0; i < l->height; ++i)
+		{
+			for (int j = 0; j < l->width; ++j)
+			{
+				int idx = _mat_index(l->width,i,j);
+				out->d[idx] = l->d[idx] + r->d[idx];
+			}
+		}
+	}
+}
+void _mat_mat_subtract(struct mat* l, struct mat* r, struct mat* out) {
+	if ((l->width != r->width) || (l->height != r->height)) {
+		printf("ERROR: Illegal attempt to add %dx%d matrix and %dx%d matrix.", l->height, l->width, r->height, r->width);
+	}
+	else {
+		for (int i = 0; i < l->height; ++i)
+		{
+			for (int j = 0; j < l->width; ++j)
+			{
+				int idx = _mat_index(l->width,i,j);
+				out->d[idx] = l->d[idx] - r->d[idx];
+			}
+		}
+	}
+}
+void _mat_mat_multiply(struct mat* l, struct mat* r, struct mat* out) {
+	for (int i = 0; i < l->height; ++i)
+	{
+		for (int j = 0; j < r->width; ++j)
+		{
+			double sum = 0;
+			for (int k = 0; k < r->height; ++k) {
+				int l_idx = _mat_index(l->width,i,k);
+				int r_idx = _mat_index(r->width,k,j);
+				sum +=  l->d[l_idx] * r->d[r_idx];
+			}
+			int idx = _mat_index(out->width, i, j);
+			out->d[idx] = sum;
+		}
+	}
+}
+
+void _mat_mat_divide(struct mat* l, struct mat* r, struct mat* out) {}
+void _mat_mat_convolute(struct mat* l, struct mat* r, struct mat* out) {}

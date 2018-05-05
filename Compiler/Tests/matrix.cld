@@ -3,6 +3,7 @@ m.0|1;
 m.0|1 = 1.0;
 
 matrix n = new(10,10);
+n.0|0 = 1.0;
 print("m matrix");
 mprint(m);
 
@@ -16,3 +17,6 @@ m = m * 10;
 mprint(m);
 m = m / 5;
 mprint(m);
+
+matrix o = m * n;
+mprint(o);
