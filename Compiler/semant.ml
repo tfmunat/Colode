@@ -17,6 +17,8 @@ let check (stmts, functions) =
         {typ = Void; fname = "print"; formals = [(String, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "iprint"; formals = [(Int, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "fprint"; formals = [(Float, "arg")]; locals = []; body = [] };
+        {typ = Void; fname = "mprint"; formals = [(Matrix, "arg")]; locals = []; body = [] };
+        {typ = Matrix; fname = "new"; formals = [(Int, "width"); (Int, "height")]; locals=[]; body=[]}
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in
@@ -67,6 +69,7 @@ let check (stmts, functions) =
         in let (t2, e2', map'') = check_expr map' e2 
         in
         let same = t1 = t2 in
+        let matrix_scalar = (t2 == Int || t2 == Float) in
         let ty = 
         match t1 with
         | ArrayList inner -> (match op with
@@ -78,6 +81,7 @@ let check (stmts, functions) =
               | Add when same && t1 = Char -> Char
               | Add when same && t1 = String -> String
               | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
+              | Add | Sub | Mult | Div when t1 = Matrix && matrix_scalar -> Matrix
               | Equal | Neq            when same               -> Bool
               | Less | Leq | Greater | Geq
                          when same && (t1 = Int || t1 = Float) -> Bool
@@ -93,7 +97,9 @@ let check (stmts, functions) =
         let err = "illegal assign-add " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix | String -> (ty, SAssign((left_t, sname), (left_t, SBinop((left_t, sname), Add, (right_t, sx)))), map'')
                 | _ -> make_err err)
@@ -101,7 +107,9 @@ let check (stmts, functions) =
         let err = "illegal assign-minus " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignMinus((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -109,7 +117,9 @@ let check (stmts, functions) =
         let err = "illegal assign-times " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignTimes((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -117,7 +127,9 @@ let check (stmts, functions) =
         let err = "illegal assign-divide " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignDivide((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -152,6 +164,19 @@ let check (stmts, functions) =
                 let clean_body = List.map (fun (t, sx, _) -> (t,sx)) sbody in
                 (ArrayList match_type, SArray(clean_body), map)
             else make_err err
+    | Array2D(l) as exp ->
+        let row_lens = List.map List.length l in
+        let length = List.hd row_lens in
+        let equal = List.for_all (fun a -> a = length) row_lens in 
+        if not equal then 
+            let err =  (string_of_expr exp) ^": matrix row lengths must be equal" in
+            make_err err
+        else let check_row r = 
+                let row_body = List.map (check_expr map) r in
+                List.map (fun (t, sx, _) -> (t,sx)) row_body
+            in
+            let rows = List.map check_row l in
+        (Matrix, SArray2D(rows), map)
     | ArrayIndex(name, idx) ->
         let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
@@ -172,7 +197,7 @@ let check (stmts, functions) =
         let index = (idx_type, si) in
         (inner_typ, SArrayIndex(arr, index), map'')
     | Array2DIndex (name, idx, idx2) ->
-        let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
+        let cannot_idx_err = "Illegal index on " ^ string_of_expr name ^ " in " in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
         let (typ, sid, map') = match name with
               Id _ -> check_expr map name

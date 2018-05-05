@@ -18,6 +18,7 @@ rule token = parse
 | '{'      { LBLOCK }
 | '}'      { RBLOCK }
 | ';'      { SEMI }
+| '|'	   { PIPE }
 | ','      { COMMA }
 | ':'      { COLON }
 | '.'	   { DOT }
@@ -27,6 +28,7 @@ rule token = parse
 | '/'      { DIVIDE }
 | '^'      { EXPONENT }
 | '%'      { MODULUS }
+| '~'		{ TILDE }
 | '='      { ASSIGN }
 | "+="     { ASSIGNADD }
 | "-="     { ASSIGNMINUS }
@@ -61,7 +63,7 @@ rule token = parse
 | "void"   { VOID }
 | "Image"  { IMAGE }
 | "Pixel"  { PIXEL }
-| "Matrix" { MATRIX }
+| "matrix" { MATRIX }
 | "true"   { BLIT(true)  }
 | "false"  { BLIT(false) }
 | digits as lxm { LITERAL(int_of_string lxm) }

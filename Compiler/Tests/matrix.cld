@@ -1,0 +1,18 @@
+matrix m = ~[ 0 0 1 | 1 0 0 ];
+m.0|1;
+m.0|1 = 1.0;
+
+matrix n = new(10,10);
+print("m matrix");
+mprint(m);
+
+//print("n matrix");
+//mprint(n);
+m = m +  1;
+mprint(m);
+m = m - 2;
+mprint(m);
+m = m * 10;
+mprint(m);
+m = m / 5;
+mprint(m);

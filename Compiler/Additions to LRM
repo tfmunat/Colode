@@ -1,0 +1,8 @@
+Additions to LRM
+	Matrix literals need a tilde before the left brace
+	Dot is index operator
+	matrix are indexed by dot then pipe
+	iprint to print int
+	fprint to print float
+	mprint to print matrix
+	new(rows, columns) to create empty matrix

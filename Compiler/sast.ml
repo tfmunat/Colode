@@ -19,6 +19,7 @@ and sx =
   | SDeclAssign of typ * string * sexpr
   | SCall of string * sexpr list
   | SArray of sexpr list
+  | SArray2D of sexpr list list 
   | SArrayIndex of sexpr * sexpr
   | SArray2DIndex of sexpr * sexpr * sexpr
   | SMemberAccess of sexpr * string list

@@ -27,6 +27,7 @@ type expr =
   | Call of string * expr list
   | Array of expr list
   | ArrayIndex of expr * expr
+  | Array2D of expr list list
   | Array2DIndex of expr * expr * expr
   | MemberAccess of expr * string list
   | Noexpr
@@ -107,6 +108,10 @@ let rec string_of_expr = function
   | MemberAccess(a, b) -> string_of_expr a ^ "." ^String.concat "." b
   | CharLiteral(c) -> "'" ^ Char.escaped c ^ "'"
   | StringLiteral(s) -> "\"" ^ s ^ "\""
+  | Array2D(l) -> "~[" ^ (String.concat "|" 
+    (List.map (fun row -> String.concat " " (List.map string_of_expr row)) 
+    l)) 
+  ^ "]"
   | Noexpr -> ""
 
 
