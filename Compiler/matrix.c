@@ -242,11 +242,40 @@ int convolve2D(struct mat* a, struct mat* kernel, struct mat* out) {
     		kern_p = kernel->d;
     		++in_p2;
     		in_p = in_p2;
-    		++out;
+    		++out_p;
     	}
     }
+    // for (int i = 0; i < a_x * a_y ; ++i)
+    //  {
+    //  	out->d[i] = 0xe;
+    //  } 
+    //  _mat_print(out);
     return 1;
 }
 void _mat_mat_convolute(struct mat* a, struct mat* b, struct mat* out) {
 	convolve2D(a, b, out);
 }
+
+void _mat_gen_gauss(double sigma, struct mat* out) {
+	double r, s = 2.0 * sigma * sigma;
+	double sum = 0.0;
+ 	double half_i = floor(out->width / 2);
+ 	double half_j = floor(out->height / 2);
+    // generating 5x5 kernel
+    for (int i = 0; i < out->width; i++)
+    {
+        for(int j = 0; j < out->height; j++)
+        {
+            r = sqrt(pow(i-half_i, 2) + pow(j-half_j, 2));
+            int idx = _mat_index(out->width, i, j);
+            out->d[idx] = (exp(-(r*r)/s))/(M_PI * s);
+            sum += out->d[idx];
+        }
+    }
+ 
+    // normalising the Kernel
+    for (int i = 0; i < out->width; ++i)
+        for (int j = 0; j < out->height; ++j) {
+        	out->d[_mat_index(out->width, i, j)] /= sum;
+        }
+}	

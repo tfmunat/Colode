@@ -5,7 +5,7 @@
 %token SEQUENCE LBLOCK RBLOCK LPAREN RPAREN LBRACE RBRACE SEMI COMMA PLUS MINUS TIMES DIVIDE
 %token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNTIMES ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR DOT
 %token RETURN IF ELSE ELIF FOR WHILE BREAK CONTINUE DEF INT BOOL FLOAT VOID IN
-%token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV PIPE TILDE POWER
+%token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV PIPE TILDE POWER ARROW
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT LITERALSTRING
@@ -110,8 +110,11 @@ matrix_index:  ID DOT atom PIPE atom { Array2DIndex(Id($1), $3, $5)}
 array_names:  array_index {$1}
     | matrix_index {$1}
 
+image_index: ID ARROW ID { ImageIndex(Id($1), $3)}
+
 name: ID {Id($1)}
     | array_names {$1}
+    | image_index { $1 }
 
 atom: LITERAL          { Literal($1)              }
   | FLIT       { Fliteral($1)             }
@@ -134,6 +137,9 @@ term:  term PLUS   term { Binop($1, Add,   $3)     }
   | term AND    term { Binop($1, And,   $3)     }
   | term OR     term { Binop($1, Or,    $3)     }
   | term CONV     term { Binop($1, Conv,    $3) }
+  | array_index  { $1 }
+  | matrix_index { $1 }
+  | image_index { $1 }
   | atom {$1}
 
 expr: 
@@ -148,8 +154,6 @@ expr:
   /*| LPAREN expr RPAREN { $2 } */
   | array_lit          { $1 }
   | matrix_lit        { $1 }
-  | array_index  { $1 }
-  | matrix_index { $1 }
   /*| atom LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
   /*| ID member     { MemberAccess(Id($1), List.rev $2) }*/
   | term {$1}

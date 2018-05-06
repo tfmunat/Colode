@@ -40,6 +40,7 @@ rule token = parse
 | "<="     { LEQ }
 | ">"      { GT }
 | ">="     { GEQ }
+| "->"     { ARROW }
 | "**"     { CONV }
 | "and"    { AND }
 | "or"     { OR }

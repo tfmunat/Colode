@@ -20,3 +20,4 @@ void _mat_mat_inverse(struct mat* l, struct mat* out);
 void _mat_mat_power(struct mat* l, int a, struct mat* out);
 void _mat_mat_convolute(struct mat* a, struct mat* b, struct mat* out);
 int _mat_mat_equal(struct mat* l, struct mat* r);
+void _mat_gen_gauss(double sigma, struct mat* out);

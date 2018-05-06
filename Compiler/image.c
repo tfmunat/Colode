@@ -9,7 +9,10 @@
 struct image {
 	int width;
 	int height;
-	struct mat channels[4];
+	struct mat red;
+	struct mat green;
+	struct mat blue;
+	struct mat alpha;
 };
 
 void _image_read(const char* filename, struct image* out) {
@@ -110,10 +113,10 @@ void _image_read(const char* filename, struct image* out) {
 	free(row_pointers);
 	out->width = width;
 	out->height = height;
-	for (int i = 0; i < 4; ++i)
-	{
-		out->channels[i] = (struct mat) {channel_d[i], width, height };
-	}
+	out->red = (struct mat) {channel_d[0], width, height };
+	out->green = (struct mat) {channel_d[1], width, height };
+	out->blue = (struct mat) {channel_d[2], width, height };
+	out->alpha = (struct mat) {channel_d[3], width, height };
 	// _mat_print(&out->channels[1]);
 }
 
@@ -159,8 +162,11 @@ void _image_write(const char* filename, struct image* in) {
 		{
 			png_byte* ptr = row + (j*8);
 			int idx = _mat_index(width, i, j);
+			((unsigned short*)ptr)[0] = (unsigned short) in->red.d[idx];
+			((unsigned short*)ptr)[1] = (unsigned short) in->green.d[idx];
+			((unsigned short*)ptr)[2] = (unsigned short) in->blue.d[idx];
+			((unsigned short*)ptr)[3] = (unsigned short) in->alpha.d[idx];
 			for (int c = 0; c < 4; c++) {
-				((unsigned short*)ptr)[c] = (unsigned short) in->channels[c].d[idx];
 			}
 			/*ptr[0] = in->channels[0].d[idx];
 			ptr[1] = in->channels[1].d[idx];

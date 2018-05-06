@@ -20,7 +20,7 @@ let translate (statements, functions) =
 	let list_t = fun (inner_typ: L.lltype) -> L.struct_type context [| L.pointer_type inner_typ; i32_t (*length*); i32_t (*capacity*)|] in
 	let string_t = L.struct_type context [| L.pointer_type char_t; i32_t (*length*); |] in 
 	let matrix_t = L.struct_type context [| L.pointer_type float_t; i32_t (*width*); i32_t (*height*) |]  in 
-	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.array_type matrix_t 4 |] in
+	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); matrix_t; matrix_t; matrix_t; matrix_t; |] in
 	let pixel_t = L.vector_type float_t 4 in
 	(* Internal constants *)
 	let zero = L.const_int i32_t 0 in
@@ -71,6 +71,8 @@ let translate (statements, functions) =
 	let image_fn_t = L.function_type void_t [| L.pointer_type char_t; L.pointer_type image_t |] in
 	let image_read_func = L.declare_function "_image_read" image_fn_t code_module in
 	let image_write_func = L.declare_function "_image_write" image_fn_t code_module in
+	let mat_gauss_t = L.function_type void_t [| float_t; L.pointer_type matrix_t |] in
+	let mat_gen_gauss = L.declare_function "_mat_gen_gauss" mat_gauss_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -267,7 +269,8 @@ let translate (statements, functions) =
 		(eq, builder)
 	in
 	let const_char c = L.const_int i8_t (Char.code c) in
-    let rec expr map builder (this: L.llvalue) (*Llvm func def*) (typ, sx) : (L.llvalue * L.llvalue StringMap.t * L.llbuilder) = match sx with
+    let rec expr map builder (this: L.llvalue) (*Llvm func def*) (typ, sx) : (L.llvalue * L.llvalue StringMap.t * L.llbuilder) = 
+    match sx with
 	  SLiteral i -> (L.const_int i32_t i, map, builder)
 	| SBoolLit b -> (L.const_int i1_t (if b then 1 else 0), map, builder)
 	| SFliteral l -> (L.const_float_of_string float_t l, map, builder)
@@ -325,6 +328,22 @@ let translate (statements, functions) =
 		let _ = L.build_call mat_zero_out_func [| alloc |] "" builder in
 		let value = L.build_load alloc "" builder in
 		(value, map, builder)
+	| SCall ("generate_gaussian", [widthx; heightx; sigmax]) ->
+		let width_v, _, builder = expr map builder this widthx in
+		let height_v, _, builder = expr map builder this heightx in
+		let sigma_v, _, builder = expr map builder this sigmax in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_gen_gauss [| sigma_v; alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
 	| SCall ("coload", [ex]) ->
 		let s_lval, _, builder = expr map builder this ex in
 		let s = L.build_extractvalue s_lval 0 "" builder in
@@ -346,8 +365,10 @@ let translate (statements, functions) =
 		let call = L.build_call ldef (Array.of_list args) "" builder in
 		(call, map, builder)
 	| SAssign(lex, rex) -> let rval, m', builder = expr map builder this rex in
-		let addr = match (snd lex) with
-		  SId s -> lookups map s
+		(match (snd lex) with
+		  SId s -> let addr = lookups map s in
+			let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
 		  | SArrayIndex(id, idx) -> let name = match snd id with 
 			    SId s -> s
 			    | _ -> "err:cannot index non-id"
@@ -356,7 +377,9 @@ let translate (statements, functions) =
 		  	let data_field_loc = L.build_struct_gep a_addr 0 "" builder in
 		  	let data_loc = L.build_load data_field_loc "" builder in
 		  	let ival, _, builder = expr map builder this idx in
-		  	L.build_gep data_loc [| zero; ival |] "" builder 
+		  	let addr = L.build_gep data_loc [| zero; ival |] "" builder  in
+		  	let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
 		  | SArray2DIndex(id, idx, idx2) -> let name = match snd id with 
 			    SId s -> s
 			    | _ -> "err:cannot index non-id"
@@ -367,11 +390,21 @@ let translate (statements, functions) =
 		  	let ival, _, builder = expr map builder this idx in
 		  	let jval, _, builder = expr map builder this idx2 in
 		  	let index, builder = M.llvm_mat_index a_addr ival jval "" builder in 
-		  	L.build_gep data_loc [| index |] "" builder
+		  	let addr = L.build_gep data_loc [| index |] "" builder in
+		  	let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
+		  | SImageIndex(id, chan) ->
+			let name = match snd id with 
+		      SId s -> s
+		    | _ -> "err:cannot index non-id"
+			in
+			let img_addr = lookups map name in
+			let index = match chan with "red" -> 2 | "green" -> 3 | "blue" -> 4 | "alpha" -> 5 | _ -> 6  in
+			let mat_loc = L.build_struct_gep img_addr index "" builder in
+			let _ = L.build_store rval mat_loc builder in
+			(rval, m', builder)
 		  | _ -> make_err "Cannot assign to a non-name type. This error should be caught by semantic checker."
-		in
-		let _ = L.build_store rval addr builder in 
-		(rval, m', builder)
+		)
 	| SDeclAssign(ty, s, rex) -> let l_type = ltype_of_typ ty in
 		let addr = L.build_alloca l_type s builder in
 		let rval, m', builder = expr map builder this rex in
@@ -455,6 +488,16 @@ let translate (statements, functions) =
 		let i_addr = L.build_gep data_loc [| index |] "" builder in
 		let value = L.build_load i_addr "" builder in
 		(value, map, builder)
+	| SImageIndex(id, chan) ->
+		let name = match snd id with 
+		      SId s -> s
+		    | _ -> "err:cannot index non-id"
+		in
+		let img_addr = lookups map name in
+		let index = match chan with "red" -> 2 | "green" -> 3 | "blue" -> 4 | "alpha" -> 5 | _ -> 6  in
+		let mat_loc = L.build_struct_gep img_addr index "" builder in
+		let mat = L.build_load mat_loc "" builder in
+		(mat, map, builder)
 	| SBinop(lex, op, rex) -> 
 		let lval, m', builder = expr map builder this lex in
 		let rval, m'', builder = expr m' builder this rex in
@@ -564,7 +607,7 @@ let translate (statements, functions) =
 					let size, builder = M.llvm_mat_size o_width o_height "" builder in
 					let output = L.build_alloca matrix_t "" builder in
 					let data_field_loc = L.build_struct_gep output 0 "" builder in
-					let data_loc = L.build_array_alloca float_t size "" builder in
+					let data_loc = L.build_array_malloc float_t size "" builder in
 					let width_loc = L.build_struct_gep output 1 "" builder in
 					let height_loc = L.build_struct_gep output 2 "" builder in
 					let _ = L.build_store data_loc data_field_loc builder in
@@ -583,6 +626,7 @@ let translate (statements, functions) =
 		)
 	| SUnop(_, _) | SAssignAdd(_, _) | SAssignMinus(_, _) | SAssignTimes(_, _) | SAssignDivide(_, _) 
 	| SMemberAccess(_, _) -> make_err "Unimplemented"
+	| _ -> make_err ("Miss????"^string_of_sexpr (typ,sx))
 	in
 	let rec stmt map builder (this: L.llvalue) (*Llvm func def*) s = match s with
 	  SBlock sl -> 

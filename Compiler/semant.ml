@@ -21,6 +21,7 @@ let check (stmts, functions) =
         {typ = Matrix; fname = "new"; formals = [(Int, "width"); (Int, "height")]; locals=[]; body=[]};
         {typ = Image; fname = "coload"; formals = [(String, "arg")]; locals=[]; body=[]};
         {typ = Void; fname = "coclose"; formals = [(Image, "img"); (String, "arg")]; locals=[]; body=[]};
+        {typ = Matrix; fname = "generate_gaussian"; formals = [(Int, "width"); (Int, "height"); (Float, "sigma");]; locals=[]; body=[]};
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in
@@ -211,22 +212,34 @@ let check (stmts, functions) =
             | _ -> make_err cannot_idx_err
         in 
         let (idx_type, si, map'') = match idx with
-              Literal _ -> check_expr map' idx
+            Id _ |  Literal _ -> check_expr map' idx
             | _ -> make_err invalid_idx_err
         in 
         let (idx2_type, si2, map''') = match idx2 with
-              Literal _ -> check_expr map'' idx2
+            Id _ |  Literal _ -> check_expr map'' idx2
             | _ -> make_err invalid_idx_err
         in
-        let mat = (typ, sid) in 
-        let index = (idx_type, si) in
-        let index2 = (idx2_type, si2) in
-        (inner_typ, SArray2DIndex(mat, index, index2), map''')
+        if (idx_type != Int) || (idx2_type != Int) then
+            make_err invalid_idx_err
+        else
+            let mat = (typ, sid) in 
+            let index = (idx_type, si) in
+            let index2 = (idx2_type, si2) in
+            (inner_typ, SArray2DIndex(mat, index, index2), map''')
+    | ImageIndex(id, channel) ->
+        let invalid_chan_err = channel ^ " is not a valid channel on " ^ (string_of_expr id) ^ ". Use red, green, blue, or alpha." in
+        let (typ, sid, map') = match id with
+              Id _ -> check_expr map id
+            | _ -> make_err "Cannot get the member of non-image variable."
+        in
+        let valid_channels = ["red"; "green"; "blue"; "alpha"] in
+        if not (List.mem channel valid_channels) then make_err invalid_chan_err
+        else (Matrix, SImageIndex((typ, sid), channel), map')
     | MemberAccess(_, _) ->  (Void, SNoexpr, map) (* Todo *)
     | Noexpr -> (Void, SNoexpr, map)
     and check_name (name : expr) map err : (Ast.typ * Sast.sx * (Ast.typ * StringMap.key) StringMap.t
 ) = match name with
-        Id _ | ArrayIndex(_,_) | Array2DIndex(_,_,_) -> check_expr map name
+        Id _ | ArrayIndex(_,_) | Array2DIndex(_,_,_) | ImageIndex(_,_) -> check_expr map name
         | _ -> make_err err
     in
     let check_bool_expr map e = 

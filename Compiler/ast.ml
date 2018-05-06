@@ -29,6 +29,7 @@ type expr =
   | ArrayIndex of expr * expr
   | Array2D of expr list list
   | Array2DIndex of expr * expr * expr
+  | ImageIndex of expr * string
   | MemberAccess of expr * string list
   | Noexpr
 
@@ -112,6 +113,7 @@ let rec string_of_expr = function
     (List.map (fun row -> String.concat " " (List.map string_of_expr row)) 
     l)) 
   ^ "]"
+  | ImageIndex(id, chan) -> string_of_expr id ^ "->" ^ chan
   | Noexpr -> ""
 
 
