@@ -2,13 +2,14 @@ matrix m = ~[ 0 0 1 | 1 0 0 ];
 m.0|1;
 m.0|1 = 1.0;
 
-matrix n = new(10,10);
+matrix n = new(3,10);
 n.0|0 = 1.0;
 print("m matrix");
 mprint(m);
 
-//print("n matrix");
-//mprint(n);
+print("n matrix");
+mprint(n);
+
 m = m +  1;
 mprint(m);
 m = m - 2;
@@ -20,3 +21,13 @@ mprint(m);
 
 matrix o = m * n;
 mprint(o);
+ matrix q = m ** n;
+mprint(q);
+matrix p = new(2,2);
+p.0|0 = 1.0;
+p.0|1 = 0.0 - 2.0;
+p.1|0 = 3.0;
+p.1|1 = 4.0;
+mprint(p);
+p = p^100;
+mprint(p);

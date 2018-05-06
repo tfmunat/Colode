@@ -18,7 +18,9 @@ let check (stmts, functions) =
         {typ = Void; fname = "iprint"; formals = [(Int, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "fprint"; formals = [(Float, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "mprint"; formals = [(Matrix, "arg")]; locals = []; body = [] };
-        {typ = Matrix; fname = "new"; formals = [(Int, "width"); (Int, "height")]; locals=[]; body=[]}
+        {typ = Matrix; fname = "new"; formals = [(Int, "width"); (Int, "height")]; locals=[]; body=[]};
+        {typ = Image; fname = "coload"; formals = [(String, "arg")]; locals=[]; body=[]};
+        {typ = Void; fname = "coclose"; formals = [(Image, "img"); (String, "arg")]; locals=[]; body=[]};
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in
@@ -61,7 +63,7 @@ let check (stmts, functions) =
         let (t, sx, map') = check_expr map e  in
         let ty = match op with
               Neg when t = Int || t = Float || t = Image || t = Matrix -> t
-            | Not when t = Bool -> Bool
+            | Not when t = Bool || t = Matrix -> t
             | _ -> make_err ("Illegal unary operator" ^ string_of_uop op ^ string_of_typ t ^ "in" ^ string_of_expr ex)
         in (ty, SUnop(op, (t, sx)), map')
     | Binop(e1, op, e2) as ex ->
@@ -69,7 +71,7 @@ let check (stmts, functions) =
         in let (t2, e2', map'') = check_expr map' e2 
         in
         let same = t1 = t2 in
-        let matrix_scalar = (t2 == Int || t2 == Float) in
+        let matrix_scalar = (t2 = Int || t2 = Float) in
         let ty = 
         match t1 with
         | ArrayList inner -> (match op with
@@ -82,6 +84,7 @@ let check (stmts, functions) =
               | Add when same && t1 = String -> String
               | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
               | Add | Sub | Mult | Div when t1 = Matrix && matrix_scalar -> Matrix
+              | Exp when t1 = Matrix && t2 = Int -> Matrix
               | Equal | Neq            when same               -> Bool
               | Less | Leq | Greater | Geq
                          when same && (t1 = Int || t1 = Float) -> Bool

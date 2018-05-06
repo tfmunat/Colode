@@ -1,8 +1,8 @@
-target: build matrix.o
+target: build matrix.o image.o
 
 build: 
 	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis toplevel.native -cflag -g -tag debug
-debug: matrix.o
+debug: matrix.o image.o
 	ocamlbuild -no-hygiene -use-ocamlfind -pkgs llvm toplevel.byte -cflag -g -tag debug
 
 .PHONY: clean tester hw
@@ -22,3 +22,6 @@ hw:
 	./helloworld.sh
 matrix.o :
 	gcc -g -c matrix.c -o matrix.o
+
+image.o:
+	gcc -g -c image.c -o image.o

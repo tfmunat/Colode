@@ -1,0 +1,2 @@
+Image img = coload("image.png");
+coclose(img, "modified.png");

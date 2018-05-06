@@ -20,7 +20,7 @@ let translate (statements, functions) =
 	let list_t = fun (inner_typ: L.lltype) -> L.struct_type context [| L.pointer_type inner_typ; i32_t (*length*); i32_t (*capacity*)|] in
 	let string_t = L.struct_type context [| L.pointer_type char_t; i32_t (*length*); |] in 
 	let matrix_t = L.struct_type context [| L.pointer_type float_t; i32_t (*width*); i32_t (*height*) |]  in 
-	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t; |] in
+	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.array_type matrix_t 4 |] in
 	let pixel_t = L.vector_type float_t 4 in
 	(* Internal constants *)
 	let zero = L.const_int i32_t 0 in
@@ -66,6 +66,11 @@ let translate (statements, functions) =
 	let mat_mat_convolute_func = L.declare_function "_mat_mat_convolute" mat_mat_t code_module in
 	let mat_equal_t = L.function_type i1_t [| L.pointer_type matrix_t; L.pointer_type matrix_t|] in
 	let mat_mat_equal_func = L.declare_function "_mat_mat_equal" mat_equal_t code_module in
+	let mat_power_t = L.function_type void_t [|L.pointer_type matrix_t; i32_t; L.pointer_type matrix_t |] in
+	let mat_mat_power_func = L.declare_function "_mat_mat_power" mat_power_t code_module in
+	let image_fn_t = L.function_type void_t [| L.pointer_type char_t; L.pointer_type image_t |] in
+	let image_read_func = L.declare_function "_image_read" image_fn_t code_module in
+	let image_write_func = L.declare_function "_image_write" image_fn_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -320,6 +325,21 @@ let translate (statements, functions) =
 		let _ = L.build_call mat_zero_out_func [| alloc |] "" builder in
 		let value = L.build_load alloc "" builder in
 		(value, map, builder)
+	| SCall ("coload", [ex]) ->
+		let s_lval, _, builder = expr map builder this ex in
+		let s = L.build_extractvalue s_lval 0 "" builder in
+		let alloc = L.build_alloca image_t "" builder in
+		let _ = L.build_call image_read_func [| s; alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("coclose", [imgx; filename]) ->
+		let s_lval, _, builder = expr map builder this filename in
+		let img_str, _, builder = expr map builder this imgx in
+		let name_s = L.build_extractvalue s_lval 0 "" builder in
+		let alloc = L.build_alloca image_t "" builder in
+		let _ = L.build_store img_str alloc builder in
+		let _ = L.build_call image_write_func [| name_s; alloc |] "" builder in
+		(zero, map, builder)
 	(*Add rest of built-in functions here *)
 	| SCall (name, exl) -> let (ldef, fd) = StringMap.find name function_decls in
 		let args = List.map (fun (a,b,c) -> a) (List.rev (List.map (expr map builder this) (List.rev exl))) in
@@ -527,6 +547,8 @@ let translate (statements, functions) =
 					| A.Sub -> L.build_call mat_scalar_subtract_func [|lv_p; value; output|] "" builder
 					| A.Mult -> L.build_call mat_scalar_multiply_func [|lv_p; value; output|] "" builder
 					| A.Div -> L.build_call mat_scalar_divide_func [|lv_p; value; output|] "" builder
+					| A.Exp -> let i_val = L.build_fptosi value i32_t "" builder in
+						L.build_call mat_mat_power_func [|lv_p; i_val; output |] "" builder
 				in
 				let output_v = L.build_load output "" builder in
 				(output_v, m'', builder)
