@@ -5,7 +5,7 @@
 %token SEQUENCE LBLOCK RBLOCK LPAREN RPAREN LBRACE RBRACE SEMI COMMA PLUS MINUS TIMES DIVIDE
 %token EXPONENT MODULUS ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNTIMES ASSIGNDIVIDE NOT EQ NEQ LT LEQ GT GEQ AND OR DOT
 %token RETURN IF ELSE ELIF FOR WHILE BREAK CONTINUE DEF INT BOOL FLOAT VOID IN
-%token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV
+%token CHAR STRING LIST IMAGE PIXEL MATRIX COLON CONV PIPE TILDE POWER ARROW
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT LITERALSTRING
@@ -18,14 +18,14 @@
 %nonassoc NOELSE NOELIF ONED
 %nonassoc ELSE ELIF  LBRACE LPAREN  RBRACE RPAREN
 %right ASSIGN ASSIGNADD ASSIGNMINUS ASSIGNDIVIDE ASSIGNTIMES 
-%left OR DOT
-%left AND
-%left EQ NEQ
+%left OR DOT PIPE
+%left AND 
+%left EQ NEQ POWER
 %left LT GT LEQ GEQ
 %left PLUS MINUS 
 %left TIMES DIVIDE LEFT
 %left EXPONENT MODULUS CONV ID SEMI 
-%right NOT NEG 
+%right NOT NEG TILDE
 
 
 %%
@@ -102,9 +102,19 @@ expr_opt:
  DOT ID { [$2] } 
  | member DOT ID { $3 :: $1 }
 */
-name: ID {Id($1)} 
-/*  | ID LBRACE atom RBRACE %prec ONED { ArrayIndex($1,$3) }
-  | ID LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
+
+array_index: ID DOT atom  { ArrayIndex(Id($1),$3) }
+
+matrix_index:  ID DOT atom PIPE atom { Array2DIndex(Id($1), $3, $5)}
+
+array_names:  array_index {$1}
+    | matrix_index {$1}
+
+image_index: ID ARROW ID { ImageIndex(Id($1), $3)}
+
+name: ID {Id($1)}
+    | array_names {$1}
+    | image_index { $1 }
 
 atom: LITERAL          { Literal($1)              }
   | FLIT       { Fliteral($1)             }
@@ -127,6 +137,9 @@ term:  term PLUS   term { Binop($1, Add,   $3)     }
   | term AND    term { Binop($1, And,   $3)     }
   | term OR     term { Binop($1, Or,    $3)     }
   | term CONV     term { Binop($1, Conv,    $3) }
+  | array_index  { $1 }
+  | matrix_index { $1 }
+  | image_index { $1 }
   | atom {$1}
 
 expr: 
@@ -140,7 +153,7 @@ expr:
   | ID LPAREN args_opt RPAREN { Call($1, $3)        }
   /*| LPAREN expr RPAREN { $2 } */
   | array_lit          { $1 }
-  | ID DOT atom  { ArrayIndex(Id($1),$3) }
+  | matrix_lit        { $1 }
   /*| atom LBRACE atom RBRACE LBRACE atom RBRACE { Array2DIndex($1,$3, $6) }*/
   /*| ID member     { MemberAccess(Id($1), List.rev $2) }*/
   | term {$1}
@@ -151,6 +164,18 @@ array_lit: LBRACE array_opt RBRACE { Array(List.rev $2) }
 array_opt: { [] } 
   | expr { [$1] }
   |  array_opt COMMA expr { $3 :: $1 }
+
+matrix_lit: TILDE LBRACE rows RBRACE { Array2D(List.rev $3)}
+
+rows:
+ row { [List.rev $1] }
+ | rows PIPE row { $3 :: (List.rev $1) }
+
+row:
+    LITERAL { [Fliteral(string_of_int $1)] }
+  | FLIT { [Fliteral($1)]}
+  | row FLIT { Fliteral($2) :: $1 }
+  | row LITERAL { Fliteral(string_of_int $2) :: $1 }
 
 args_opt:
     /* nothing */ { [] }

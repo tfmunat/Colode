@@ -25,7 +25,9 @@ for t in ./Tests/*.cld;
 			fi
 		else
 			expected=$(head -2 $t | tail -1 | sed 's/^\/\///')
-			output=$(lli test.ll)
+			llc test.ll > test.s
+			gcc -fPIC -lc -static-libgcc -lm -no-pie -o test test.s matrix.o
+			output=$(./test)
 			echo $output
 			echo $output | grep -qa "$expected"
 			if [ $? -eq 0 ]; then
@@ -36,7 +38,7 @@ for t in ./Tests/*.cld;
 				failure=$((failure +1))
 			fi
 		fi
-		rm -f test.ll
+		rm -f test.ll test.s
 		echo ""
 	done
 echo "================="

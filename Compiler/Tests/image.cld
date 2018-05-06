@@ -1,0 +1,21 @@
+Image img = coload("injection.png");
+//// Build gaussian matrix
+// matrix gaussian = new(3,3);
+// gaussian.0|0 = 1.0 / 16.0;
+// gaussian.0|1 = 1.0 / 8.0;
+// gaussian.0|2 = 1.0 / 16.0;
+// gaussian.1|0 = 1.0 / 8.0;
+// gaussian.1|1 = 1.0 / 4.0;
+// gaussian.1|2 = 1.0 / 8.0;
+// gaussian.2|0 = 1.0 / 16.0;
+// gaussian.2|1 = 1.0 / 8.0;
+// gaussian.2|2 = 1.0 / 16.0;
+
+matrix gaussian = generate_gaussian(5, 5, 10.0);
+print("Gaussian");
+mprint(gaussian);
+img->red = img->red ** gaussian;
+img->blue = img->blue ** gaussian;
+img->green = img->green ** gaussian;
+//img->alpha = img->alpha ** gaussian;
+coclose(img, "modified.png");

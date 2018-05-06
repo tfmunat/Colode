@@ -17,6 +17,11 @@ let check (stmts, functions) =
         {typ = Void; fname = "print"; formals = [(String, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "iprint"; formals = [(Int, "arg")]; locals = []; body = [] };
         {typ = Void; fname = "fprint"; formals = [(Float, "arg")]; locals = []; body = [] };
+        {typ = Void; fname = "mprint"; formals = [(Matrix, "arg")]; locals = []; body = [] };
+        {typ = Matrix; fname = "new"; formals = [(Int, "width"); (Int, "height")]; locals=[]; body=[]};
+        {typ = Image; fname = "coload"; formals = [(String, "arg")]; locals=[]; body=[]};
+        {typ = Void; fname = "coclose"; formals = [(Image, "img"); (String, "arg")]; locals=[]; body=[]};
+        {typ = Matrix; fname = "generate_gaussian"; formals = [(Int, "width"); (Int, "height"); (Float, "sigma");]; locals=[]; body=[]};
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in
@@ -59,7 +64,7 @@ let check (stmts, functions) =
         let (t, sx, map') = check_expr map e  in
         let ty = match op with
               Neg when t = Int || t = Float || t = Image || t = Matrix -> t
-            | Not when t = Bool -> Bool
+            | Not when t = Bool || t = Matrix -> t
             | _ -> make_err ("Illegal unary operator" ^ string_of_uop op ^ string_of_typ t ^ "in" ^ string_of_expr ex)
         in (ty, SUnop(op, (t, sx)), map')
     | Binop(e1, op, e2) as ex ->
@@ -67,6 +72,7 @@ let check (stmts, functions) =
         in let (t2, e2', map'') = check_expr map' e2 
         in
         let same = t1 = t2 in
+        let matrix_scalar = (t2 = Int || t2 = Float) in
         let ty = 
         match t1 with
         | ArrayList inner -> (match op with
@@ -78,6 +84,8 @@ let check (stmts, functions) =
               | Add when same && t1 = Char -> Char
               | Add when same && t1 = String -> String
               | Add | Sub | Mult | Div | Conv when same && t1 = Matrix -> Matrix
+              | Add | Sub | Mult | Div when t1 = Matrix && matrix_scalar -> Matrix
+              | Exp when t1 = Matrix && t2 = Int -> Matrix
               | Equal | Neq            when same               -> Bool
               | Less | Leq | Greater | Geq
                          when same && (t1 = Int || t1 = Float) -> Bool
@@ -93,7 +101,9 @@ let check (stmts, functions) =
         let err = "illegal assign-add " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix | String -> (ty, SAssign((left_t, sname), (left_t, SBinop((left_t, sname), Add, (right_t, sx)))), map'')
                 | _ -> make_err err)
@@ -101,7 +111,9 @@ let check (stmts, functions) =
         let err = "illegal assign-minus " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignMinus((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -109,7 +121,9 @@ let check (stmts, functions) =
         let err = "illegal assign-times " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignTimes((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -117,7 +131,9 @@ let check (stmts, functions) =
         let err = "illegal assign-divide " ^ string_of_expr ex in
         let (left_t, sname, map') = check_name name map err in
         let (right_t, sx, map'') = check_expr map' e in
-        let ty = check_type_equal left_t right_t err
+        let ty = match left_t with
+              Matrix -> (match right_t with Int | Float -> Float | Matrix -> Matrix | _ -> make_err err)
+            | _ -> check_type_equal left_t right_t err
         in (match ty with
                   Int | Float | Matrix -> (ty, SAssignDivide((left_t, sname), (right_t, sx)), map'')
                 | _ -> make_err err)
@@ -152,6 +168,19 @@ let check (stmts, functions) =
                 let clean_body = List.map (fun (t, sx, _) -> (t,sx)) sbody in
                 (ArrayList match_type, SArray(clean_body), map)
             else make_err err
+    | Array2D(l) as exp ->
+        let row_lens = List.map List.length l in
+        let length = List.hd row_lens in
+        let equal = List.for_all (fun a -> a = length) row_lens in 
+        if not equal then 
+            let err =  (string_of_expr exp) ^": matrix row lengths must be equal" in
+            make_err err
+        else let check_row r = 
+                let row_body = List.map (check_expr map) r in
+                List.map (fun (t, sx, _) -> (t,sx)) row_body
+            in
+            let rows = List.map check_row l in
+        (Matrix, SArray2D(rows), map)
     | ArrayIndex(name, idx) ->
         let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
@@ -172,7 +201,7 @@ let check (stmts, functions) =
         let index = (idx_type, si) in
         (inner_typ, SArrayIndex(arr, index), map'')
     | Array2DIndex (name, idx, idx2) ->
-        let cannot_idx_err = "Illegal index on " ^ string_of_expr name in
+        let cannot_idx_err = "Illegal index on " ^ string_of_expr name ^ " in " in
         let invalid_idx_err = "Illegal index on " ^ string_of_expr name ^ ". Index must be numerical" in
         let (typ, sid, map') = match name with
               Id _ -> check_expr map name
@@ -183,22 +212,34 @@ let check (stmts, functions) =
             | _ -> make_err cannot_idx_err
         in 
         let (idx_type, si, map'') = match idx with
-              Literal _ -> check_expr map' idx
+            Id _ |  Literal _ -> check_expr map' idx
             | _ -> make_err invalid_idx_err
         in 
         let (idx2_type, si2, map''') = match idx2 with
-              Literal _ -> check_expr map'' idx2
+            Id _ |  Literal _ -> check_expr map'' idx2
             | _ -> make_err invalid_idx_err
         in
-        let mat = (typ, sid) in 
-        let index = (idx_type, si) in
-        let index2 = (idx2_type, si2) in
-        (inner_typ, SArray2DIndex(mat, index, index2), map''')
+        if (idx_type != Int) || (idx2_type != Int) then
+            make_err invalid_idx_err
+        else
+            let mat = (typ, sid) in 
+            let index = (idx_type, si) in
+            let index2 = (idx2_type, si2) in
+            (inner_typ, SArray2DIndex(mat, index, index2), map''')
+    | ImageIndex(id, channel) ->
+        let invalid_chan_err = channel ^ " is not a valid channel on " ^ (string_of_expr id) ^ ". Use red, green, blue, or alpha." in
+        let (typ, sid, map') = match id with
+              Id _ -> check_expr map id
+            | _ -> make_err "Cannot get the member of non-image variable."
+        in
+        let valid_channels = ["red"; "green"; "blue"; "alpha"] in
+        if not (List.mem channel valid_channels) then make_err invalid_chan_err
+        else (Matrix, SImageIndex((typ, sid), channel), map')
     | MemberAccess(_, _) ->  (Void, SNoexpr, map) (* Todo *)
     | Noexpr -> (Void, SNoexpr, map)
     and check_name (name : expr) map err : (Ast.typ * Sast.sx * (Ast.typ * StringMap.key) StringMap.t
 ) = match name with
-        Id _ | ArrayIndex(_,_) | Array2DIndex(_,_,_) -> check_expr map name
+        Id _ | ArrayIndex(_,_) | Array2DIndex(_,_,_) | ImageIndex(_,_) -> check_expr map name
         | _ -> make_err err
     in
     let check_bool_expr map e = 

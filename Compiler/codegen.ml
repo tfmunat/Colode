@@ -1,6 +1,7 @@
 
 module L = Llvm
 module A = Ast
+module M = Matrix
 open Sast 
 
 module StringMap = Map.Make(String)
@@ -19,7 +20,7 @@ let translate (statements, functions) =
 	let list_t = fun (inner_typ: L.lltype) -> L.struct_type context [| L.pointer_type inner_typ; i32_t (*length*); i32_t (*capacity*)|] in
 	let string_t = L.struct_type context [| L.pointer_type char_t; i32_t (*length*); |] in 
 	let matrix_t = L.struct_type context [| L.pointer_type float_t; i32_t (*width*); i32_t (*height*) |]  in 
-	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t; |] in
+	let image_t  = L.struct_type context [| i32_t (*width*); i32_t (* height *); matrix_t; matrix_t; matrix_t; matrix_t; |] in
 	let pixel_t = L.vector_type float_t 4 in
 	(* Internal constants *)
 	let zero = L.const_int i32_t 0 in
@@ -48,6 +49,30 @@ let translate (statements, functions) =
 	let pow_func = L.declare_function "pow" pow_t code_module in
 	let printf_t = L.var_arg_function_type i32_t [| (L.pointer_type char_t)|] in
 	let printf_func = L.declare_function "printf" printf_t code_module in
+	let mat_zero_out_t = L.function_type void_t [| L.pointer_type matrix_t |] in
+	let mat_zero_out_func = L.declare_function "_mat_zero_out" mat_zero_out_t code_module in
+	let mat_print_t = L.function_type void_t [|  L.pointer_type matrix_t |] in
+	let mat_print_func = L.declare_function "_mat_print" mat_print_t code_module in
+	let mat_scalar_t = L.function_type void_t [| L.pointer_type matrix_t; float_t; L.pointer_type matrix_t |] in
+	let mat_scalar_add_func = L.declare_function "_mat_scalar_add" mat_scalar_t code_module in
+	let mat_scalar_subtract_func = L.declare_function "_mat_scalar_subtract" mat_scalar_t code_module in
+	let mat_scalar_multiply_func = L.declare_function "_mat_scalar_multiply" mat_scalar_t code_module in
+	let mat_scalar_divide_func = L.declare_function "_mat_scalar_divide" mat_scalar_t code_module in
+	let mat_mat_t = L.function_type void_t [| L.pointer_type matrix_t; L.pointer_type matrix_t; L.pointer_type matrix_t;|] in
+	let mat_mat_add_func = L.declare_function "_mat_mat_add" mat_mat_t code_module in
+	let mat_mat_subtract_func = L.declare_function "_mat_mat_subtract" mat_mat_t code_module in
+	let mat_mat_multiply_func = L.declare_function "_mat_mat_multiply" mat_mat_t code_module in
+	let mat_mat_divide_func = L.declare_function "_mat_mat_divide" mat_mat_t code_module in
+	let mat_mat_convolute_func = L.declare_function "_mat_mat_convolute" mat_mat_t code_module in
+	let mat_equal_t = L.function_type i1_t [| L.pointer_type matrix_t; L.pointer_type matrix_t|] in
+	let mat_mat_equal_func = L.declare_function "_mat_mat_equal" mat_equal_t code_module in
+	let mat_power_t = L.function_type void_t [|L.pointer_type matrix_t; i32_t; L.pointer_type matrix_t |] in
+	let mat_mat_power_func = L.declare_function "_mat_mat_power" mat_power_t code_module in
+	let image_fn_t = L.function_type void_t [| L.pointer_type char_t; L.pointer_type image_t |] in
+	let image_read_func = L.declare_function "_image_read" image_fn_t code_module in
+	let image_write_func = L.declare_function "_image_write" image_fn_t code_module in
+	let mat_gauss_t = L.function_type void_t [| float_t; L.pointer_type matrix_t |] in
+	let mat_gen_gauss = L.declare_function "_mat_gen_gauss" mat_gauss_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -243,11 +268,13 @@ let translate (statements, functions) =
 		let eq = L.build_load is_equal "" builder in
 		(eq, builder)
 	in
-    let rec expr map builder (this: L.llvalue) (*Llvm func def*) (typ, sx) : (L.llvalue * L.llvalue StringMap.t * L.llbuilder) = match sx with
+	let const_char c = L.const_int i8_t (Char.code c) in
+    let rec expr map builder (this: L.llvalue) (*Llvm func def*) (typ, sx) : (L.llvalue * L.llvalue StringMap.t * L.llbuilder) = 
+    match sx with
 	  SLiteral i -> (L.const_int i32_t i, map, builder)
 	| SBoolLit b -> (L.const_int i1_t (if b then 1 else 0), map, builder)
 	| SFliteral l -> (L.const_float_of_string float_t l, map, builder)
-	| SCharLiteral c -> (L.const_int i8_t (Char.code c), map, builder)
+	| SCharLiteral c -> (const_char c, map, builder)
 	| SStringLiteral s -> let alloc = L.build_alloca string_t "" builder in (* eventually figure out a way to store value in registers instead of making an extra allocation*)
 		let str_global = L.build_global_string s "" builder in
 		let str = L.build_bitcast str_global (L.pointer_type i8_t) "" builder in
@@ -274,16 +301,74 @@ let translate (statements, functions) =
 		let decimal_spec = L.build_global_stringptr "%d" "" builder in
 		(L.build_call printf_func [|decimal_spec; s_lval|] "" builder, map, builder)
 	| SCall ("fprint", [ex]) -> let s_lval, _, builder = expr map builder this ex in
+		(* let decimal_spec = L.build_array_alloca i8_t (const_i32_of 2) "" builder in
+		let fst_idx = L.build_gep decimal_spec [| zero |] "" builder in
+		let snd_idx = L.build_gep decimal_spec [| one |] "" builder in
+		let _ = L.build_store (const_char '%') fst_idx builder in
+		let _ = L.build_store (const_char 'f') snd_idx builder in *)
 		let decimal_spec = L.build_global_stringptr "%f" "" builder in
 		(L.build_call printf_func [|decimal_spec; s_lval|] "" builder, map, builder)
+	| SCall ("mprint", [ex]) -> 
+		let arg_v, _, builder = expr map builder this ex in
+		let arg_p = L.build_alloca matrix_t "" builder in
+		let _ = L.build_store arg_v arg_p builder in
+		(L.build_call mat_print_func [|arg_p|] "" builder, map, builder)
+	| SCall ("new", [widthx; heightx]) ->
+		let width_v, _, builder = expr map builder this widthx in
+		let height_v, _, builder = expr map builder this heightx in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_zero_out_func [| alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("generate_gaussian", [widthx; heightx; sigmax]) ->
+		let width_v, _, builder = expr map builder this widthx in
+		let height_v, _, builder = expr map builder this heightx in
+		let sigma_v, _, builder = expr map builder this sigmax in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_gen_gauss [| sigma_v; alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("coload", [ex]) ->
+		let s_lval, _, builder = expr map builder this ex in
+		let s = L.build_extractvalue s_lval 0 "" builder in
+		let alloc = L.build_alloca image_t "" builder in
+		let _ = L.build_call image_read_func [| s; alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("coclose", [imgx; filename]) ->
+		let s_lval, _, builder = expr map builder this filename in
+		let img_str, _, builder = expr map builder this imgx in
+		let name_s = L.build_extractvalue s_lval 0 "" builder in
+		let alloc = L.build_alloca image_t "" builder in
+		let _ = L.build_store img_str alloc builder in
+		let _ = L.build_call image_write_func [| name_s; alloc |] "" builder in
+		(zero, map, builder)
 	(*Add rest of built-in functions here *)
 	| SCall (name, exl) -> let (ldef, fd) = StringMap.find name function_decls in
 		let args = List.map (fun (a,b,c) -> a) (List.rev (List.map (expr map builder this) (List.rev exl))) in
 		let call = L.build_call ldef (Array.of_list args) "" builder in
 		(call, map, builder)
 	| SAssign(lex, rex) -> let rval, m', builder = expr map builder this rex in
-		let addr = match (snd lex) with
-		  SId s -> lookups map s
+		(match (snd lex) with
+		  SId s -> let addr = lookups map s in
+			let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
 		  | SArrayIndex(id, idx) -> let name = match snd id with 
 			    SId s -> s
 			    | _ -> "err:cannot index non-id"
@@ -292,7 +377,9 @@ let translate (statements, functions) =
 		  	let data_field_loc = L.build_struct_gep a_addr 0 "" builder in
 		  	let data_loc = L.build_load data_field_loc "" builder in
 		  	let ival, _, builder = expr map builder this idx in
-		  	L.build_gep data_loc [| zero; ival |] "" builder 
+		  	let addr = L.build_gep data_loc [| zero; ival |] "" builder  in
+		  	let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
 		  | SArray2DIndex(id, idx, idx2) -> let name = match snd id with 
 			    SId s -> s
 			    | _ -> "err:cannot index non-id"
@@ -301,12 +388,23 @@ let translate (statements, functions) =
 		  	let data_field_loc = L.build_struct_gep a_addr 0 "" builder in
 		  	let data_loc = L.build_load data_field_loc "" builder in
 		  	let ival, _, builder = expr map builder this idx in
-		  	let ival2, _, builder = expr map builder this idx2 in
-		  	L.build_gep data_loc [| zero; ival; ival2 |] "" builder
+		  	let jval, _, builder = expr map builder this idx2 in
+		  	let index, builder = M.llvm_mat_index a_addr ival jval "" builder in 
+		  	let addr = L.build_gep data_loc [| index |] "" builder in
+		  	let _ = L.build_store rval addr builder in 
+			(rval, m', builder)
+		  | SImageIndex(id, chan) ->
+			let name = match snd id with 
+		      SId s -> s
+		    | _ -> "err:cannot index non-id"
+			in
+			let img_addr = lookups map name in
+			let index = match chan with "red" -> 2 | "green" -> 3 | "blue" -> 4 | "alpha" -> 5 | _ -> 6  in
+			let mat_loc = L.build_struct_gep img_addr index "" builder in
+			let _ = L.build_store rval mat_loc builder in
+			(rval, m', builder)
 		  | _ -> make_err "Cannot assign to a non-name type. This error should be caught by semantic checker."
-		in
-		let _ = L.build_store rval addr builder in 
-		(rval, m', builder)
+		)
 	| SDeclAssign(ty, s, rex) -> let l_type = ltype_of_typ ty in
 		let addr = L.build_alloca l_type s builder in
 		let rval, m', builder = expr map builder this rex in
@@ -348,6 +446,34 @@ let translate (statements, functions) =
 		let i_addr = L.build_gep data_loc [| ival |] "" builder in 
 		let value = L.build_load i_addr "" builder in
 		(value, map, builder)
+	| SArray2D sl -> 
+		let ty = matrix_t in
+		let alloc = L.build_alloca ty "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let width = List.length (List.hd sl) in 
+		let height = List.length sl in
+		let size = (const_i32_of (M.mat_size width height)) in
+		let data_loc = L.build_array_alloca float_t size "" builder
+		in
+		let row_store (i, builder) exl =
+			let column_store (j, builder) ex =
+				let value, m', builder = expr map builder this ex in
+				let index = M.mat_index width i j in
+				let item_loc = L.build_gep data_loc [|const_i32_of index |] "" builder in
+				let _ = L.build_store value item_loc builder in
+				(j + 1, builder)
+			in
+			let _, builder = List.fold_left column_store (0, builder) exl in
+			(i+1, builder)
+		in
+		let _, builder = List.fold_left row_store (0, builder) sl in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store (const_i32_of width) width_loc builder in
+		let _ = L.build_store (const_i32_of height) height_loc builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
 	| SArray2DIndex(id, idx, idx2) -> 
 		let name = match snd id with 
 		      SId s -> s
@@ -356,11 +482,22 @@ let translate (statements, functions) =
 		let a_addr = lookups map name in
 		let data_field_loc = L.build_struct_gep a_addr 0 "" builder in
 		let data_loc = L.build_load data_field_loc "" builder in
-		let ival, _, builder = expr map builder this idx in
-		let ival2, _, builder = expr map builder this idx2 in
-		let i_addr = L.build_gep data_loc [| zero; ival; ival2 |] "" builder in
+		let ival, _, builder = expr map builder this idx in 
+		let jval, _, builder = expr map builder this idx2 in 
+		let index, builder = M.llvm_mat_index a_addr ival jval "" builder in
+		let i_addr = L.build_gep data_loc [| index |] "" builder in
 		let value = L.build_load i_addr "" builder in
 		(value, map, builder)
+	| SImageIndex(id, chan) ->
+		let name = match snd id with 
+		      SId s -> s
+		    | _ -> "err:cannot index non-id"
+		in
+		let img_addr = lookups map name in
+		let index = match chan with "red" -> 2 | "green" -> 3 | "blue" -> 4 | "alpha" -> 5 | _ -> 6  in
+		let mat_loc = L.build_struct_gep img_addr index "" builder in
+		let mat = L.build_load mat_loc "" builder in
+		(mat, map, builder)
 	| SBinop(lex, op, rex) -> 
 		let lval, m', builder = expr map builder this lex in
 		let rval, m'', builder = expr m' builder this rex in
@@ -368,82 +505,128 @@ let translate (statements, functions) =
 		(match ty with
 		  A.Int ->
 			(match op with
-				A.Add -> L.build_add lval rval "" builder, map, builder
-				| A.Sub -> L.build_sub lval rval "" builder, map, builder
-				| A.Mult -> L.build_mul lval rval "" builder, map, builder
-				| A.Div -> L.build_sdiv  lval rval "" builder, map, builder
-				| A.Equal -> L.build_icmp L.Icmp.Eq lval rval "" builder, map, builder
-				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, map, builder
-				| A.Less -> L.build_icmp L.Icmp.Slt lval rval "" builder, map, builder
-				| A.Leq -> L.build_icmp L.Icmp.Sle lval rval "" builder, map, builder
-				| A.Greater -> L.build_icmp L.Icmp.Sgt lval rval "" builder, map, builder
-				| A.Geq -> L.build_icmp L.Icmp.Sge lval rval "" builder, map, builder
-				| A.And -> L.build_and lval rval "" builder, map, builder
-				| A.Or -> L.build_or lval rval "" builder, map, builder
+				A.Add -> L.build_add lval rval "" builder, m'', builder
+				| A.Sub -> L.build_sub lval rval "" builder, m'', builder
+				| A.Mult -> L.build_mul lval rval "" builder, m'', builder
+				| A.Div -> L.build_sdiv  lval rval "" builder, m'', builder
+				| A.Equal -> L.build_icmp L.Icmp.Eq lval rval "" builder, m'', builder
+				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, m'', builder
+				| A.Less -> L.build_icmp L.Icmp.Slt lval rval "" builder, m'', builder
+				| A.Leq -> L.build_icmp L.Icmp.Sle lval rval "" builder, m'', builder
+				| A.Greater -> L.build_icmp L.Icmp.Sgt lval rval "" builder, m'', builder
+				| A.Geq -> L.build_icmp L.Icmp.Sge lval rval "" builder, m'', builder
+				| A.And -> L.build_and lval rval "" builder, m'', builder
+				| A.Or -> L.build_or lval rval "" builder, m'', builder
 				| A.Exp -> let lfval = L.build_sitofp lval float_t "" builder in
 					let rfval = L.build_sitofp rval float_t "" builder in
 					let f_result = L.build_call pow_func [|lfval; rfval|] "" builder in
 					let add_half = L.build_fadd f_result (const_float_of 0.5) "" builder in
-					(L.build_fptosi add_half i32_t "" builder, map, builder)
+					(L.build_fptosi add_half i32_t "" builder, m'', builder)
 				| A.Conv -> make_err "internal error, cannot perform this operation on integers"
 			)
 		| A.Float ->
 			(match op with
-				A.Add -> L.build_fadd lval rval "" builder, map, builder
-				| A.Sub -> L.build_fsub lval rval "" builder, map, builder
-				| A.Mult -> L.build_fmul lval rval "" builder, map, builder
-				| A.Div -> L.build_fdiv lval rval "" builder, map, builder
-				| A.Equal -> L.build_fcmp L.Fcmp.Oeq lval rval "" builder, map, builder
-				| A.Neq -> L.build_fcmp L.Fcmp.One lval rval "" builder, map, builder
-				| A.Less -> L.build_fcmp L.Fcmp.Olt lval rval "" builder, map, builder
-				| A.Leq -> L.build_fcmp L.Fcmp.Ole lval rval "" builder, map, builder
-				| A.Greater -> L.build_fcmp L.Fcmp.Ogt lval rval "" builder, map, builder
-				| A.Geq -> L.build_fcmp L.Fcmp.Oge lval rval "" builder, map, builder
-				| A.Exp -> L.build_call pow_func [|lval; rval|] "" builder, map, builder
+				A.Add -> L.build_fadd lval rval "" builder, m'', builder
+				| A.Sub -> L.build_fsub lval rval "" builder, m'', builder
+				| A.Mult -> L.build_fmul lval rval "" builder, m'', builder
+				| A.Div -> L.build_fdiv lval rval "" builder, m'', builder
+				| A.Equal -> L.build_fcmp L.Fcmp.Oeq lval rval "" builder, m'', builder
+				| A.Neq -> L.build_fcmp L.Fcmp.One lval rval "" builder, m'', builder
+				| A.Less -> L.build_fcmp L.Fcmp.Olt lval rval "" builder, m'', builder
+				| A.Leq -> L.build_fcmp L.Fcmp.Ole lval rval "" builder, m'', builder
+				| A.Greater -> L.build_fcmp L.Fcmp.Ogt lval rval "" builder, m'', builder
+				| A.Geq -> L.build_fcmp L.Fcmp.Oge lval rval "" builder, m'', builder
+				| A.Exp -> L.build_call pow_func [|lval; rval|] "" builder, m'', builder
 				| _ -> make_err "internal error, cannot perform this operation on floats"
 			)
 		| A.Bool ->
 			(match op with
-				  A.Equal ->  L.build_icmp L.Icmp.Eq lval rval "" builder, map, builder
-				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, map, builder
-				| A.And -> L.build_and lval rval "" builder, map, builder
-				| A.Or -> L.build_or lval rval "" builder, map, builder
+				  A.Equal ->  L.build_icmp L.Icmp.Eq lval rval "" builder, m'', builder
+				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, m'', builder
+				| A.And -> L.build_and lval rval "" builder, m'', builder
+				| A.Or -> L.build_or lval rval "" builder, m'', builder
 				| _ -> make_err "internal error, cannot perform this operation on booleans"
 			)
 		| A.Char ->
 			( match op with
-				  A.Equal -> L.build_icmp L.Icmp.Eq lval rval "" builder, map, builder
-				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, map, builder
-				| A.Add	-> binop_char_concat lval rval "" builder, map, builder
+				  A.Equal -> L.build_icmp L.Icmp.Eq lval rval "" builder, m'', builder
+				| A.Neq -> L.build_icmp L.Icmp.Ne lval rval "" builder, m'', builder
+				| A.Add	-> binop_char_concat lval rval "" builder, m'', builder
 				| _ -> make_err "internal error, cannot perform this operation on characters"
 			)
 		| A.ArrayList t ->
 			( match op with
-				  A.Add	-> let arr, b = binop_array_concat t this lval rval "" builder in (arr, map, b)
+				  A.Add	-> let arr, b = binop_array_concat t this lval rval "" builder in (arr, m'', b)
 				| _ -> make_err "internal error, cannot perform this operation on characters"
 			)
 		| A.String ->
 			( match op with
-				  A.Equal -> let eq, b = binop_str_equal this lval rval "" builder in (eq, map, b)
+				  A.Equal -> let eq, b = binop_str_equal this lval rval "" builder in (eq, m'', b)
 				| A.Neq -> let eq, b = binop_str_equal this lval rval "" builder in
-					(L.build_not eq "" b, map, b)
-				| A.Add	-> let n_str, b =  binop_str_concat this lval rval "" builder in (n_str, map, b)
+					(L.build_not eq "" b, m'', b)
+				| A.Add	-> let n_str, b =  binop_str_concat this lval rval "" builder in (n_str, m'', b)
 				| _ -> make_err "internal error, cannot perform this operation on characters"
 			)
+		| A.Matrix ->
+			let lv_p = L.build_alloca matrix_t "" builder in
+			let _ = L.build_store lval lv_p builder in
+			let width = L.build_extractvalue lval 1 "" builder in
+			let height = L.build_extractvalue lval 2 "" builder in
+			let size, builder = M.llvm_mat_size width height ""  builder in 
+			let r_type, _ = rex in
+			match r_type with
+			  Int | Float ->
+				let value = match r_type with Int -> (L.build_sitofp rval float_t "" builder) | Float -> rval in
+				let output = L.build_alloca matrix_t "" builder in
+				let data_field_loc = L.build_struct_gep output 0 "" builder in
+				let data_loc = L.build_array_alloca float_t size "" builder in
+				let width_loc = L.build_struct_gep output 1 "" builder in
+				let height_loc = L.build_struct_gep output 2 "" builder in
+				let _ = L.build_store data_loc data_field_loc builder in
+				let _ = L.build_store width width_loc builder in
+				let _ = L.build_store height height_loc builder in
+				let _ = match op with
+					A.Add -> L.build_call mat_scalar_add_func [|lv_p; value; output|] "" builder
+					| A.Sub -> L.build_call mat_scalar_subtract_func [|lv_p; value; output|] "" builder
+					| A.Mult -> L.build_call mat_scalar_multiply_func [|lv_p; value; output|] "" builder
+					| A.Div -> L.build_call mat_scalar_divide_func [|lv_p; value; output|] "" builder
+					| A.Exp -> let i_val = L.build_fptosi value i32_t "" builder in
+						L.build_call mat_mat_power_func [|lv_p; i_val; output |] "" builder
+				in
+				let output_v = L.build_load output "" builder in
+				(output_v, m'', builder)
+			| Matrix ->
+				let rv_p = L.build_alloca matrix_t "" builder in
+				let _ = L.build_store rval rv_p builder in
+				let r_width = L.build_extractvalue rval 1 "" builder in
+				let r_height = L.build_extractvalue rval 2 "" builder in
+				match op with
+				  A.Equal -> L.build_call mat_mat_equal_func [|lv_p; rv_p|] "" builder, m'', builder
+				| _ ->
+					let (o_width, o_height, builder) = M.llvm_output_size op lval rval builder in
+					let size, builder = M.llvm_mat_size o_width o_height "" builder in
+					let output = L.build_alloca matrix_t "" builder in
+					let data_field_loc = L.build_struct_gep output 0 "" builder in
+					let data_loc = L.build_array_malloc float_t size "" builder in
+					let width_loc = L.build_struct_gep output 1 "" builder in
+					let height_loc = L.build_struct_gep output 2 "" builder in
+					let _ = L.build_store data_loc data_field_loc builder in
+					let _ = L.build_store o_width width_loc builder in
+					let _ = L.build_store o_height height_loc builder in
+					let _ = match op with
+						  A.Add -> L.build_call mat_mat_add_func [|lv_p; rv_p; output |] "" builder 
+						| A.Sub -> L.build_call mat_mat_subtract_func [|lv_p; rv_p; output |] "" builder 
+						| A.Mult -> L.build_call mat_mat_multiply_func [|lv_p; rv_p; output |] "" builder 
+						| A.Div -> L.build_call mat_mat_divide_func [|lv_p; rv_p; output |] "" builder 
+						| A.Conv -> L.build_call mat_mat_convolute_func [|lv_p; rv_p; output |] "" builder 
+					in
+					let value = L.build_load output "" builder in
+					(value, m'', builder )
 		| _ -> make_err "unimplemented"
 		)
-		(* A.Matrix ->
-			( match op with
-				A.Add -> L.build_fadd
-				| A.Sub -> L.build_fsub
-				| A.Mult -> L.build_fmul
-				| A.Div -> L.build_fdiv 
-				| A.Equal -> L.build_fcmp L.Fcmp.Oeq
-				| A.Conv ->
-			)
-		*)
 	| SUnop(_, _) | SAssignAdd(_, _) | SAssignMinus(_, _) | SAssignTimes(_, _) | SAssignDivide(_, _) 
 	| SMemberAccess(_, _) -> make_err "Unimplemented"
+	| _ -> make_err ("Miss????"^string_of_sexpr (typ,sx))
 	in
 	let rec stmt map builder (this: L.llvalue) (*Llvm func def*) s = match s with
 	  SBlock sl -> 

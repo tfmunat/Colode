@@ -19,8 +19,10 @@ and sx =
   | SDeclAssign of typ * string * sexpr
   | SCall of string * sexpr list
   | SArray of sexpr list
+  | SArray2D of sexpr list list 
   | SArrayIndex of sexpr * sexpr
   | SArray2DIndex of sexpr * sexpr * sexpr
+  | SImageIndex of sexpr * string
   | SMemberAccess of sexpr * string list
   | SNoexpr
 
@@ -66,6 +68,7 @@ let rec string_of_sexpr (sex:sexpr) = match snd sex with
   | SArray(l) -> "[" ^ (String.concat ", " (List.map string_of_sexpr l)) ^ "]"
   | SArrayIndex(a, b) -> string_of_sexpr a ^ "[" ^ string_of_sexpr b ^ "]"
   | SArray2DIndex(a, b, c) -> string_of_sexpr a ^ "[" ^ string_of_sexpr b ^ "]" ^ "[" ^ string_of_sexpr c ^ "]"
+  | SImageIndex(ex, chan) -> string_of_sexpr ex ^ "->" ^ chan
   | SMemberAccess(a, b) -> string_of_sexpr a ^ "." ^String.concat "." b
   | SCharLiteral(c) -> "'" ^ Char.escaped c ^ "'"
   | SStringLiteral(s) -> "\"" ^ s ^ "\""
