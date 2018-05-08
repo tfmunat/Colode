@@ -22,6 +22,9 @@ let check (stmts, functions) =
         {typ = Image; fname = "coload"; formals = [(String, "arg")]; locals=[]; body=[]};
         {typ = Void; fname = "coclose"; formals = [(Image, "img"); (String, "arg")]; locals=[]; body=[]};
         {typ = Matrix; fname = "generate_gaussian"; formals = [(Int, "width"); (Int, "height"); (Float, "sigma");]; locals=[]; body=[]};
+        {typ = Matrix; fname = "generate_brighten"; formals = [ (Float, "intensity");]; locals=[]; body=[]};
+        {typ = Matrix; fname = "generate_sharpen"; formals = []; locals=[]; body=[]};
+        {typ = Matrix; fname = "generate_edge_detect"; formals = []; locals=[]; body=[]};
         ]  (* TODO add other standard library functions*)
     in
     let func_decls = List.fold_left add_func built_in_funcs functions  in

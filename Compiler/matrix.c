@@ -239,6 +239,7 @@ int convolve2D(struct mat* a, struct mat* kernel, struct mat* out) {
     			}
     			in_p -= a_x;
     		}
+    		if (*out_p < 0) *out_p = 0;
     		kern_p = kernel->d;
     		++in_p2;
     		in_p = in_p2;
@@ -279,3 +280,28 @@ void _mat_gen_gauss(double sigma, struct mat* out) {
         	out->d[_mat_index(out->width, i, j)] /= sum;
         }
 }	
+
+void _mat_gen_sharpen(struct mat* out) {
+    int mid_idx = _mat_index(out->width, out->width / 2, out->height / 2);
+    out->d[mid_idx] = 5;
+    out->d[_mat_index(out->width, out->width / 2, 0)] = -1.0;
+    out->d[_mat_index(out->width, 0, out->height / 2)] = -1.0;
+    out->d[_mat_index(out->width, out->width - 1, out->height / 2)] = -1.0;
+    out->d[_mat_index(out->width, out->width / 2, out->height -1)] = -1.0;
+}
+void _mat_gen_brighten(double value, struct mat* out) {
+	int mid_idx = _mat_index(out->width, out->width / 2, out->height / 2);
+	out->d[mid_idx] = value;
+}
+void _mat_gen_edge_detect(struct mat* out) {
+	for (int i = 0; i < out->width; i++)
+    {
+        for(int j = 0; j < out->height; j++)
+        {
+            int idx = _mat_index(out->width, i, j);
+            out->d[idx] = -1.0;
+        }
+    }
+    int mid_idx = _mat_index(out->width, out->width / 2, out->height / 2);
+    out->d[mid_idx] = 8.0;
+}
