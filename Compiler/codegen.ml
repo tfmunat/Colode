@@ -73,6 +73,9 @@ let translate (statements, functions) =
 	let image_write_func = L.declare_function "_image_write" image_fn_t code_module in
 	let mat_gauss_t = L.function_type void_t [| float_t; L.pointer_type matrix_t |] in
 	let mat_gen_gauss = L.declare_function "_mat_gen_gauss" mat_gauss_t code_module in
+	let mat_gen_sharpen = L.declare_function "_mat_gen_sharpen" mat_zero_out_t code_module in
+	let mat_gen_edge_detect = L.declare_function "_mat_gen_edge_detect" mat_zero_out_t code_module in
+	let mat_gen_brighten = L.declare_function "_mat_gen_brighten" mat_gauss_t code_module in
 	let function_decls =
 		let func_decl map fd =
 			let name = fd.sfname in
@@ -342,6 +345,52 @@ let translate (statements, functions) =
 		let _ = L.build_store width_v width_loc builder in
 		let _ = L.build_store height_v height_loc builder in
 		let _ = L.build_call mat_gen_gauss [| sigma_v; alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("generate_sharpen", []) ->
+		let width_v = const_i32_of 3 in
+		let height_v = const_i32_of 3 in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_gen_sharpen [| alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("generate_edge_detect", []) ->
+		let width_v = const_i32_of 3 in
+		let height_v = const_i32_of 3 in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_gen_edge_detect [| alloc |] "" builder in
+		let value = L.build_load alloc "" builder in
+		(value, map, builder)
+	| SCall ("generate_brighten", [ex]) ->
+		let intensity, _, builder = expr map builder this ex in
+		let width_v = const_i32_of 3 in
+		let height_v = const_i32_of 3 in
+		let size, builder = M.llvm_mat_size width_v height_v "" builder in
+		let alloc = L.build_alloca matrix_t "" builder in
+		let data_field_loc = L.build_struct_gep alloc 0 "" builder in
+		let width_loc = L.build_struct_gep alloc 1 "" builder in
+		let height_loc = L.build_struct_gep alloc 2 "" builder in
+		let data_loc = L.build_array_alloca float_t size "" builder in
+		let _ = L.build_store data_loc data_field_loc builder in
+		let _ = L.build_store width_v width_loc builder in
+		let _ = L.build_store height_v height_loc builder in
+		let _ = L.build_call mat_gen_brighten [| intensity; alloc |] "" builder in
 		let value = L.build_load alloc "" builder in
 		(value, map, builder)
 	| SCall ("coload", [ex]) ->
